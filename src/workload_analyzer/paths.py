@@ -6,10 +6,9 @@ DB_FILE_NAME = "workload.db"
 
 
 def data_dir() -> Path:
-    base = os.environ.get("APPDATA")
-    if not base:
-        base = str(Path.home())
-    d = Path(base) / APP_DIR_NAME
+    appdata = os.environ.get("APPDATA")
+    base = Path(appdata) if appdata else Path.home()
+    d = base / APP_DIR_NAME
     d.mkdir(parents=True, exist_ok=True)
     return d
 
