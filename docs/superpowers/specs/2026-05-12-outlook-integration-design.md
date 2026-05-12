@@ -99,7 +99,7 @@ Während Meeting-Lock: Benutzer kann jederzeit per Tray-Menü oder Floating Widg
 
 ### 5.3 MeetingCategoryDialog
 
-Einfacher `QDialog` mit Titel *"Meeting '\<Titel\>' gestartet. Welche Kategorie?"*, `QComboBox` mit aktiven Kategorien, OK-Button. Kein Abbrechen (Pflichtfeld). Gehört direkt in `suggestion_popup.py`.
+Einfacher `QDialog` mit Titel *"Meeting '\<Titel\>' gestartet. Welche Kategorie?"*, `QComboBox` mit aktiven Kategorien, OK-Button. Kein Abbrechen-Button. Wenn Benutzer das Fenster per X schliesst → aktuelle Kategorie bleibt unverändert. Gehört direkt in `suggestion_popup.py`.
 
 ## 6. Lernfunktion (rejected_suggestions)
 
@@ -137,7 +137,7 @@ Im `SettingsWindow` wird ein dritter Tab *"Outlook"* ergänzt mit:
 
 ### 7.2 Tray-Icon Farbe
 
-`TrayIcon.refresh()` bekommt einen zusätzlichen Parameter `outlook_available: bool`. Wenn `False` → Icon-Farbe orange (statt der Kategoriefarbe). Bereits vorbereitet in Phase 1 (refresh-Methode existiert).
+`TrayIcon` bekommt eine neue Methode `set_outlook_available(available: bool)` die ein internes Flag setzt. `refresh()` (bereits vorhanden) liest dieses Flag: wenn `False` → Icon-Farbe orange (statt der Kategoriefarbe). `availability_changed`-Signal des Monitors wird direkt mit `tray.set_outlook_available` verbunden.
 
 ## 8. ImportOutlookDialog
 
