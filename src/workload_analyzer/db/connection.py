@@ -4,6 +4,9 @@ from importlib.resources import files
 
 
 def connect(db_path: Path) -> sqlite3.Connection:
+    # isolation_level=None enables autocommit mode. All writes are immediate.
+    # For atomic multi-table operations (e.g. entry + outlook reference), callers
+    # must wrap in explicit BEGIN/COMMIT via conn.execute("BEGIN") / conn.execute("COMMIT").
     conn = sqlite3.connect(str(db_path), isolation_level=None)
     conn.row_factory = sqlite3.Row
     conn.execute("PRAGMA foreign_keys = ON")
