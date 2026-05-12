@@ -1,6 +1,8 @@
+from workload_analyzer.app import run
+
+
 def main() -> int:
-    print("WorkloadAnalyzer not yet implemented")
-    return 0
+    return run()
 
 
 if __name__ == "__main__":
