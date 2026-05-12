@@ -44,3 +44,13 @@ class TimeEntry:
         if self.end_ts is None:
             return 0
         return self.end_ts - self.start_ts
+
+
+@dataclass
+class RejectedSuggestion:
+    id: Optional[int]
+    outlook_category_name: str
+    app_category_id: int
+    rejection_count: int
+    silenced: bool
+    last_rejected_at: str
