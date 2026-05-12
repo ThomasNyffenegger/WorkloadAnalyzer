@@ -1,3 +1,5 @@
+import datetime
+
 import pytest
 from workload_analyzer.services.outlook_monitor import OutlookMonitor
 
@@ -153,7 +155,6 @@ def test_no_duplicate_availability_signals(qtbot):
 # ---------------------------------------------------------------------------
 
 def test_meeting_started_signal(qtbot):
-    import datetime
     now = datetime.datetime.now()
     appt = FakeItem(
         subject="Team Sync",
@@ -172,7 +173,6 @@ def test_meeting_started_signal(qtbot):
 
 
 def test_meeting_ended_signal(qtbot):
-    import datetime
     now = datetime.datetime.now()
     appt = FakeItem(
         subject="Team Sync",
@@ -193,7 +193,6 @@ def test_meeting_ended_signal(qtbot):
 
 
 def test_no_duplicate_meeting_started(qtbot):
-    import datetime
     now = datetime.datetime.now()
     appt = FakeItem(
         subject="Team Sync",
@@ -212,7 +211,6 @@ def test_no_duplicate_meeting_started(qtbot):
 
 
 def test_meeting_no_category(qtbot):
-    import datetime
     now = datetime.datetime.now()
     appt = FakeItem(
         subject="1:1",
@@ -228,3 +226,29 @@ def test_meeting_no_category(qtbot):
     monitor._poll()
 
     assert started == [("1:1", None)]
+
+
+def test_meeting_ended_emitted_on_availability_loss(qtbot):
+    """When Outlook becomes unavailable mid-meeting, meeting_ended must fire."""
+    now = datetime.datetime.now()
+    appt = FakeItem(
+        subject="Team Sync",
+        start=now - datetime.timedelta(minutes=5),
+        end=now + datetime.timedelta(minutes=25),
+    )
+    calls = [0]
+
+    def flaky_factory():
+        calls[0] += 1
+        if calls[0] == 1:
+            return FakeOutlookApp(appointments=[appt])
+        raise RuntimeError("Outlook crashed")
+
+    monitor = OutlookMonitor(outlook_factory=flaky_factory)
+    monitor._poll()  # meeting starts
+
+    ended = []
+    monitor.meeting_ended.connect(lambda: ended.append(True))
+    monitor._poll()  # Outlook goes down → should emit meeting_ended
+
+    assert ended == [True]

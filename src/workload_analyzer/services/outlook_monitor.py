@@ -37,6 +37,7 @@ class OutlookMonitor(QObject):
         self._last_category: Optional[str] = None
         self._in_meeting: bool = False
         self._available: Optional[bool] = None  # None = never polled yet
+        self._interval_ms: int = 15_000
 
     # ------------------------------------------------------------------
     # Public API
@@ -44,16 +45,18 @@ class OutlookMonitor(QObject):
 
     def start(self, interval_seconds: int = 15) -> None:
         """Start polling at the given interval."""
-        self._timer.start(interval_seconds * 1000)
+        self._interval_ms = interval_seconds * 1000
+        self._timer.start(self._interval_ms)
 
     def stop(self) -> None:
         """Stop polling."""
         self._timer.stop()
 
     def set_interval(self, seconds: int) -> None:
-        """Change poll interval. Takes effect on the next tick."""
+        """Change poll interval. Persists across stop/start."""
+        self._interval_ms = seconds * 1000
         if self._timer.isActive():
-            self._timer.start(seconds * 1000)
+            self._timer.start(self._interval_ms)
 
     # ------------------------------------------------------------------
     # Internal
@@ -72,8 +75,9 @@ class OutlookMonitor(QObject):
             if self._available is not False:
                 self._available = False
                 self.availability_changed.emit(False)
-            self._last_category = None
-            self._in_meeting = False
+            if self._in_meeting:
+                self._in_meeting = False
+                self.meeting_ended.emit()
             return
 
         if self._available is not True:
