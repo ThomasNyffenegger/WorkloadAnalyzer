@@ -9,6 +9,12 @@ class OverlapError(ValueError):
 
 
 class Repository:
+    """CRUD layer over SQLite. The connection is opened in autocommit mode
+    (isolation_level=None in connection.py), so every statement commits immediately.
+    Callers that need atomicity across multiple writes must issue explicit
+    conn.execute("BEGIN") / conn.execute("COMMIT") around their operations.
+    """
+
     def __init__(self, conn: sqlite3.Connection):
         self.conn = conn
 
@@ -34,9 +40,9 @@ class Repository:
             return None
         return Role(id=row["id"], name=row["name"])
 
-    def rename_role(self, role_id: int, new_name: str) -> None:
+    def rename_role(self, role_id: int, name: str) -> None:
         self.conn.execute(
-            "UPDATE roles SET name = ? WHERE id = ?", (new_name, role_id)
+            "UPDATE roles SET name = ? WHERE id = ?", (name, role_id)
         )
 
     def delete_role(self, role_id: int) -> None:
@@ -148,6 +154,8 @@ class Repository:
     def start_entry(self, category_id: int, start_ts: int, source: "EntrySource") -> int:
         if self.get_open_entry() is not None:
             raise OverlapError("Another entry is currently open")
+        # Also check that no closed entry straddles start_ts from the left.
+        # _check_no_overlap uses 2**63-1 as +infinity for the open-ended new entry.
         self._check_no_overlap(start_ts, None, exclude_id=None)
         cur = self.conn.execute(
             "INSERT INTO time_entries (category_id, start_ts, end_ts, source) "
