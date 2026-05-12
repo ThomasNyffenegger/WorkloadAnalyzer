@@ -270,3 +270,74 @@ class Repository:
             "ON CONFLICT(key) DO UPDATE SET value = excluded.value",
             (key, value),
         )
+
+    # --- Rejected Suggestions ---
+
+    def record_rejection(
+        self, outlook_name: str, app_category_id: int, immediate_silence: bool = False,
+    ) -> None:
+        self.conn.execute(
+            """
+            INSERT INTO rejected_suggestions
+                (outlook_category_name, app_category_id, rejection_count, silenced, last_rejected_at)
+            VALUES (?, ?, 1, 0, datetime('now'))
+            ON CONFLICT(outlook_category_name, app_category_id) DO UPDATE SET
+                rejection_count = rejection_count + 1,
+                last_rejected_at = datetime('now')
+            """,
+            (outlook_name, app_category_id),
+        )
+        if immediate_silence:
+            self.conn.execute(
+                "UPDATE rejected_suggestions SET silenced = 1 "
+                "WHERE outlook_category_name = ? AND app_category_id = ?",
+                (outlook_name, app_category_id),
+            )
+        else:
+            row = self.conn.execute(
+                "SELECT rejection_count FROM rejected_suggestions "
+                "WHERE outlook_category_name = ? AND app_category_id = ?",
+                (outlook_name, app_category_id),
+            ).fetchone()
+            if row and row["rejection_count"] >= 3:
+                self.conn.execute(
+                    "UPDATE rejected_suggestions SET silenced = 1 "
+                    "WHERE outlook_category_name = ? AND app_category_id = ?",
+                    (outlook_name, app_category_id),
+                )
+
+    def is_silenced(self, outlook_name: str, app_category_id: int) -> bool:
+        row = self.conn.execute(
+            "SELECT silenced FROM rejected_suggestions "
+            "WHERE outlook_category_name = ? AND app_category_id = ?",
+            (outlook_name, app_category_id),
+        ).fetchone()
+        return False if row is None else bool(row["silenced"])
+
+    def list_rejected_suggestions(self) -> list["RejectedSuggestion"]:
+        from workload_analyzer.models import RejectedSuggestion
+        rows = self.conn.execute(
+            """
+            SELECT id, outlook_category_name, app_category_id,
+                   rejection_count, silenced, last_rejected_at
+            FROM rejected_suggestions
+            ORDER BY last_rejected_at DESC
+            """
+        ).fetchall()
+        return [
+            RejectedSuggestion(
+                id=r["id"],
+                outlook_category_name=r["outlook_category_name"],
+                app_category_id=r["app_category_id"],
+                rejection_count=r["rejection_count"],
+                silenced=bool(r["silenced"]),
+                last_rejected_at=r["last_rejected_at"],
+            )
+            for r in rows
+        ]
+
+    def set_silenced(self, suggestion_id: int, silenced: bool) -> None:
+        self.conn.execute(
+            "UPDATE rejected_suggestions SET silenced = ? WHERE id = ?",
+            (1 if silenced else 0, suggestion_id),
+        )
