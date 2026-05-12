@@ -1,0 +1,42 @@
+{
+  "permissions": {
+    "allow": [
+      "Bash(python -c \"import pytest\")",
+      "Bash(python -m workload_analyzer)",
+      "Bash(python -m pytest -q)",
+      "Bash(echo \"Exit code: $?\")",
+      "Bash(python -m pytest -v)",
+      "Bash(git add *)",
+      "Bash(git commit *)",
+      "Bash(git config *)",
+      "Bash(python -m pytest tests/ -q)",
+      "Bash(echo \"Pytest exit code: $?\")",
+      "Bash(dir /s src tests)",
+      "Bash(python -m pip install -e \".[dev]\" --quiet)",
+      "Bash(python -m pytest tests/ -v)",
+      "Bash(python -c \"from workload_analyzer import __version__; print\\(f'Version: {__version__}'\\)\")",
+      "Bash(python -c \"import pytest; from pathlib import Path; import tempfile; from tests.conftest import tmp_db_path\")",
+      "Bash(ruff check *)",
+      "Bash(python -m ruff check src/ tests/)",
+      "Bash(git -c user.email=thomasnyffenegger@gmail.com -c user.name=\"Thomas\" commit -m \"fix: remove unused sqlite3 import from conftest\")",
+      "Bash(Get-ChildItem -Path \"D:\\\\Claude\\\\Projekte\\\\WorkloadAnalyzer\" -Recurse -Force)",
+      "Bash(Select-Object FullName)",
+      "Bash(python -m pytest tests/test_paths.py -v)",
+      "Bash(python -m pytest tests/test_paths.py -v --tb=short)",
+      "Bash(python)",
+      "Bash(pytest tests/test_paths.py -v)",
+      "Bash(git -c user.email=thomasnyffenegger@gmail.com -c user.name=\"Thomas\" commit -m \"fix: clean up paths.py and add fallback test\")",
+      "Bash(python -m pytest tests/test_db_connection.py -v)",
+      "Bash(python -m pip install -e \".[dev]\" -q)",
+      "Bash(python -c ' *)",
+      "Bash(python -m pytest tests/ -v --tb=short)",
+      "Bash(python -m pytest tests/test_db_connection.py -v --tb=short)",
+      "Bash(python -m pytest tests/test_db_connection.py -q)",
+      "Bash(git -c user.email=thomasnyffenegger@gmail.com -c user.name=\"Thomas\" commit -m \"fix\\(db\\): remove redundant PRAGMA from schema.sql, document autocommit mode\")",
+      "Bash(Get-ChildItem -Path \"D:\\\\Claude\\\\Projekte\\\\WorkloadAnalyzer\" -Recurse -Include \"*.py\")",
+      "Bash(Select-Object -First 20)",
+      "Bash(python -m pytest tests/test_models.py -v)",
+      "Bash(git -c user.email=thomasnyffenegger@gmail.com -c user.name=\"Thomas\" commit -m \"fix\\(repo\\): document autocommit contract, fix rename_role param name, add comment on overlap check\")"
+    ]
+  }
+}
