@@ -6,22 +6,24 @@ from PyQt6.QtWidgets import (
     QCheckBox, QColorDialog, QComboBox, QDialog, QDialogButtonBox,
     QFormLayout, QHBoxLayout, QInputDialog, QLabel, QLineEdit,
     QListWidget, QListWidgetItem, QMessageBox, QPushButton,
-    QTabWidget, QTableWidget, QTableWidgetItem, QVBoxLayout, QWidget,
+    QSpinBox, QTabWidget, QTableWidget, QTableWidgetItem, QVBoxLayout, QWidget,
 )
 
 from workload_analyzer.db.repository import Repository
 
 
 class SettingsWindow(QDialog):
-    def __init__(self, repo: Repository, parent: Optional[QWidget] = None):
+    def __init__(self, repo: Repository, monitor=None, parent: Optional[QWidget] = None):
         super().__init__(parent)
         self.repo = repo
+        self._monitor = monitor  # Optional[OutlookMonitor] — may be None in tests
         self.setWindowTitle("WorkloadAnalyzer — Einstellungen")
         self.resize(720, 520)
 
         tabs = QTabWidget(self)
         tabs.addTab(self._build_categories_tab(), "Rollen & Kategorien")
         tabs.addTab(self._build_general_tab(), "Allgemein")
+        tabs.addTab(self._build_outlook_tab(), "Outlook")
 
         buttons = QDialogButtonBox(QDialogButtonBox.StandardButton.Close)
         buttons.rejected.connect(self.accept)
@@ -70,8 +72,8 @@ class SettingsWindow(QDialog):
         edit_cat.clicked.connect(self._edit_category)
         del_cat = QPushButton("Löschen")
         del_cat.clicked.connect(self._delete_category)
-        import_outlook = QPushButton("Aus Outlook importieren (Phase 2)")
-        import_outlook.setEnabled(False)
+        import_outlook = QPushButton("Aus Outlook importieren")
+        import_outlook.clicked.connect(self._import_from_outlook)
         ch.addWidget(add_cat)
         ch.addWidget(edit_cat)
         ch.addWidget(del_cat)
@@ -195,16 +197,72 @@ class SettingsWindow(QDialog):
         self.rounding_combo.currentIndexChanged.connect(self._save_rounding)
         form.addRow("Rundung:", self.rounding_combo)
 
-        info = QLabel("Hotkeys, Autostart, Backup und Outlook-Integration kommen in den nächsten Phasen.")
-        info.setStyleSheet("color: #888;")
-        info.setWordWrap(True)
-        form.addRow(info)
-
         return w
 
     def _save_rounding(self) -> None:
         val = self.rounding_combo.currentData()
         self.repo.set_setting("rounding_minutes", str(val))
+
+    def _build_outlook_tab(self) -> QWidget:
+        w = QWidget()
+        layout = QVBoxLayout(w)
+
+        # Poll interval
+        form = QFormLayout()
+        self._poll_spin = QSpinBox()
+        self._poll_spin.setRange(5, 60)
+        self._poll_spin.setSuffix(" s")
+        current_poll = int(self.repo.get_setting("outlook_poll_seconds", "15") or "15")
+        self._poll_spin.setValue(current_poll)
+        self._poll_spin.valueChanged.connect(self._save_poll_interval)
+        form.addRow("Poll-Intervall:", self._poll_spin)
+        layout.addLayout(form)
+
+        layout.addWidget(QLabel("Stummgeschaltete Erkennungen:"))
+
+        self._rejected_table = QTableWidget(0, 4)
+        self._rejected_table.setHorizontalHeaderLabels(
+            ["Outlook-Name", "App-Kategorie", "Ablehnungen", "Aktion"]
+        )
+        self._rejected_table.horizontalHeader().setStretchLastSection(True)
+        self._rejected_table.setEditTriggers(QTableWidget.EditTrigger.NoEditTriggers)
+        layout.addWidget(self._rejected_table)
+
+        self._refresh_rejected()
+        return w
+
+    def _save_poll_interval(self, value: int) -> None:
+        self.repo.set_setting("outlook_poll_seconds", str(value))
+        if self._monitor is not None:
+            self._monitor.set_interval(value)
+
+    def _refresh_rejected(self) -> None:
+        suggestions = self.repo.list_rejected_suggestions()
+        cats = {c.id: c.name for c in self.repo.list_categories()}
+        self._rejected_table.setRowCount(0)
+        self._suggestion_ids: list[int] = []
+        for s in suggestions:
+            row = self._rejected_table.rowCount()
+            self._rejected_table.insertRow(row)
+            self._suggestion_ids.append(s.id)
+            self._rejected_table.setItem(row, 0, QTableWidgetItem(s.outlook_category_name))
+            self._rejected_table.setItem(row, 1, QTableWidgetItem(cats.get(s.app_category_id, "?")))
+            self._rejected_table.setItem(row, 2, QTableWidgetItem(str(s.rejection_count)))
+            action_btn = QPushButton("Reaktivieren" if s.silenced else "Stumm schalten")
+            action_btn.clicked.connect(
+                lambda _checked=False, sid=s.id, silenced=s.silenced: self._toggle_silenced(sid, silenced)
+            )
+            self._rejected_table.setCellWidget(row, 3, action_btn)
+
+    def _toggle_silenced(self, suggestion_id: int, currently_silenced: bool) -> None:
+        self.repo.set_silenced(suggestion_id, not currently_silenced)
+        self._refresh_rejected()
+
+    def _import_from_outlook(self) -> None:
+        from workload_analyzer.ui.import_outlook_dialog import ImportOutlookDialog
+        dlg = ImportOutlookDialog(self.repo, self)
+        if dlg.exec():
+            self._refresh_categories()
 
 
 class _CategoryDialog(QDialog):
