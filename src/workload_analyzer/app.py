@@ -96,11 +96,85 @@ def run() -> int:
     monitor.start(poll_seconds)
 
     # ------------------------------------------------------------------
+    # System Monitor (screen lock + idle)
+    # ------------------------------------------------------------------
+    from workload_analyzer.services.system_monitor import SystemMonitor
+    from workload_analyzer.ui.recovery_popup import (
+        RecoveryPopup, RECOVERY_PREVIOUS, RECOVERY_OTHER, RECOVERY_DISCARD,
+    )
+
+    idle_threshold_minutes = int(
+        repo.get_setting("idle_threshold_minutes", "10") or "10"
+    )
+    sys_monitor = SystemMonitor(idle_threshold_seconds=idle_threshold_minutes * 60)
+
+    # Absence state shared between on_absence_started and on_return handlers
+    _absence = [None]  # Optional[(absence_start_ts: int, prev_cat_id: Optional[int])]
+
+    def _on_absence_started(absence_start_ts: int) -> None:
+        prev_cat_id = tracker.stop_at(absence_start_ts)
+        _absence[0] = (absence_start_ts, prev_cat_id)
+
+    def _show_recovery(absence_end_ts: int, reason: str, source: EntrySource) -> None:
+        info = _absence[0]
+        if info is None:
+            return
+        _absence[0] = None
+        absence_start_ts, prev_cat_id = info
+        absent_seconds = absence_end_ts - absence_start_ts
+
+        active_cats = repo.list_categories(active_only=True)
+        prev_cat = next((c for c in active_cats if c.id == prev_cat_id), None)
+
+        popup = RecoveryPopup(absent_seconds, reason, prev_cat, active_cats)
+        result = popup.exec()
+
+        if result == RECOVERY_PREVIOUS and prev_cat_id is not None:
+            try:
+                repo.insert_closed_entry(prev_cat_id, absence_start_ts, absence_end_ts, source)
+            except Exception:
+                pass  # overlap guard — don't crash if DB has unexpected state
+            tracker.start(prev_cat_id, EntrySource.MANUAL)
+
+        elif result == RECOVERY_OTHER:
+            chosen_id = popup.selected_category_id()
+            if chosen_id is not None:
+                try:
+                    repo.insert_closed_entry(chosen_id, absence_start_ts, absence_end_ts, source)
+                except Exception:
+                    pass
+                tracker.start(chosen_id, EntrySource.MANUAL)
+
+        else:  # RECOVERY_DISCARD (or no previous category)
+            if prev_cat_id is not None:
+                tracker.start(prev_cat_id, EntrySource.MANUAL)
+
+        tray.refresh()
+
+    def _on_session_locked(lock_ts: int) -> None:
+        _on_absence_started(lock_ts)
+
+    def _on_session_unlocked(lock_ts: int, unlock_ts: int) -> None:
+        _show_recovery(unlock_ts, "Bildschirm gesperrt", EntrySource.SCREEN_LOCK_RECOVERY)
+
+    def _on_idle_started(idle_start_ts: int) -> None:
+        _on_absence_started(idle_start_ts)
+
+    def _on_user_returned(idle_start_ts: int, return_ts: int) -> None:
+        _show_recovery(return_ts, "Inaktivität", EntrySource.IDLE_RECOVERY)
+
+    sys_monitor.session_locked.connect(_on_session_locked)
+    sys_monitor.session_unlocked.connect(_on_session_unlocked)
+    sys_monitor.idle_started.connect(_on_idle_started)
+    sys_monitor.user_returned.connect(_on_user_returned)
+    sys_monitor.start()
+
+    # ------------------------------------------------------------------
     # Settings / Reports / Widget
     # ------------------------------------------------------------------
     def open_settings():
         from workload_analyzer.ui.settings_window import SettingsWindow
-        win = SettingsWindow(repo, monitor=monitor)
+        win = SettingsWindow(repo, monitor=monitor, system_monitor=sys_monitor)
         win.exec()
         tray.refresh()
 
@@ -124,6 +198,7 @@ def run() -> int:
     tray.toggle_widget.connect(toggle_widget)
 
     def _quit():
+        sys_monitor.stop()
         monitor.stop()
         app.quit()
 
