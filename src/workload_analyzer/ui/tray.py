@@ -30,6 +30,7 @@ class TrayIcon(QObject):
         super().__init__(parent)
         self.repo = repo
         self.tracker = tracker
+        self._outlook_available: bool = True
 
         self.icon = QSystemTrayIcon(_make_color_icon("#888888"))
         self.icon.setToolTip("WorkloadAnalyzer")
@@ -120,6 +121,16 @@ class TrayIcon(QObject):
             self._pause_action.setEnabled(False)
             self._resume_action.setEnabled(False)
 
+        # Override icon colour when Outlook is unreachable
+        if not self._outlook_available:
+            self.icon.setIcon(_make_color_icon("#ff8800"))
+            self.icon.setToolTip(self.icon.toolTip() + " ⚠ Outlook nicht verfügbar")
+
     def _on_pause(self) -> None:
         self.tracker.pause()
+        self.refresh()
+
+    def set_outlook_available(self, available: bool) -> None:
+        """Called when OutlookMonitor reports availability change."""
+        self._outlook_available = available
         self.refresh()
