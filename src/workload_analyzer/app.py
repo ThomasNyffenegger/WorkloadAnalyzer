@@ -8,6 +8,7 @@ from workload_analyzer.db.connection import connect
 from workload_analyzer.db.repository import Repository
 from workload_analyzer.models import EntrySource
 from workload_analyzer.paths import db_path
+from workload_analyzer.services.outlook_monitor import OutlookMonitor
 from workload_analyzer.ui.tray import TrayIcon
 
 
@@ -41,10 +42,66 @@ def run() -> int:
 
     tray = TrayIcon(repo=repo, tracker=tracker)
 
-    # Wire windows on demand.
+    # ------------------------------------------------------------------
+    # Outlook Monitor
+    # ------------------------------------------------------------------
+    poll_seconds = int(repo.get_setting("outlook_poll_seconds", "15") or "15")
+    monitor = OutlookMonitor()
+    _active_popup = [None]  # list to allow mutation in nested closures
+
+    def _on_category_detected(outlook_name: str) -> None:
+        from workload_analyzer.ui.suggestion_popup import (
+            SuggestionPopup, SUGGESTION_YES, SUGGESTION_NO, SUGGESTION_NEVER,
+        )
+        cat = repo.find_category_by_outlook_name(outlook_name)
+        if cat is None:
+            return
+        if repo.is_silenced(outlook_name, cat.id):
+            return
+        # Close any previously open popup (treated as rejection)
+        if _active_popup[0] is not None and _active_popup[0].isVisible():
+            _active_popup[0].done(SUGGESTION_NO)
+        popup = SuggestionPopup(outlook_name, cat.name)
+        _active_popup[0] = popup
+        result = popup.exec()
+        if result == SUGGESTION_YES:
+            tracker.switch_to(cat.id, EntrySource.AUTO_OUTLOOK)
+        elif result == SUGGESTION_NO:
+            repo.record_rejection(outlook_name, cat.id)
+        elif result == SUGGESTION_NEVER:
+            repo.record_rejection(outlook_name, cat.id, immediate_silence=True)
+
+    def _on_meeting_started(title: str, outlook_category) -> None:
+        from workload_analyzer.ui.suggestion_popup import MeetingCategoryDialog
+        active_cats = repo.list_categories(active_only=True)
+        if outlook_category:
+            cat = repo.find_category_by_outlook_name(outlook_category)
+            if cat:
+                tracker.switch_to(cat.id, EntrySource.AUTO_MEETING)
+                return
+        # No mapped category — ask user
+        dlg = MeetingCategoryDialog(title, active_cats)
+        if dlg.exec():
+            cat_id = dlg.selected_category_id()
+            if cat_id is not None:
+                tracker.switch_to(cat_id, EntrySource.AUTO_MEETING)
+
+    def _on_meeting_ended() -> None:
+        pass  # Lock release — tracker continues on current category
+
+    monitor.category_detected.connect(_on_category_detected)
+    monitor.meeting_started.connect(_on_meeting_started)
+    monitor.meeting_ended.connect(_on_meeting_ended)
+    monitor.availability_changed.connect(tray.set_outlook_available)
+    monitor.start(poll_seconds)
+
+    # ------------------------------------------------------------------
+    # Settings / Reports / Widget
+    # ------------------------------------------------------------------
     def open_settings():
         from workload_analyzer.ui.settings_window import SettingsWindow
-        SettingsWindow(repo).exec()
+        win = SettingsWindow(repo, monitor=monitor)
+        win.exec()
         tray.refresh()
 
     def open_reports():
@@ -65,6 +122,11 @@ def run() -> int:
     tray.open_settings.connect(open_settings)
     tray.open_reports.connect(open_reports)
     tray.toggle_widget.connect(toggle_widget)
-    tray.quit_requested.connect(app.quit)
+
+    def _quit():
+        monitor.stop()
+        app.quit()
+
+    tray.quit_requested.connect(_quit)
 
     return app.exec()
