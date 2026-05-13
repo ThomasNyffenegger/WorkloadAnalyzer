@@ -13,10 +13,11 @@ from workload_analyzer.db.repository import Repository
 
 
 class SettingsWindow(QDialog):
-    def __init__(self, repo: Repository, monitor=None, parent: Optional[QWidget] = None):
+    def __init__(self, repo: Repository, monitor=None, system_monitor=None, parent: Optional[QWidget] = None):
         super().__init__(parent)
         self.repo = repo
-        self._monitor = monitor  # Optional[OutlookMonitor] — may be None in tests
+        self._monitor = monitor           # Optional[OutlookMonitor]
+        self._system_monitor = system_monitor  # Optional[SystemMonitor]
         self.setWindowTitle("WorkloadAnalyzer — Einstellungen")
         self.resize(720, 520)
 
@@ -197,11 +198,24 @@ class SettingsWindow(QDialog):
         self.rounding_combo.currentIndexChanged.connect(self._save_rounding)
         form.addRow("Rundung:", self.rounding_combo)
 
+        self._idle_spin = QSpinBox()
+        self._idle_spin.setRange(5, 60)
+        self._idle_spin.setSuffix(" Min")
+        current_idle = int(self.repo.get_setting("idle_threshold_minutes", "10") or "10")
+        self._idle_spin.setValue(current_idle)
+        self._idle_spin.valueChanged.connect(self._save_idle_threshold)
+        form.addRow("Idle-Schwellwert:", self._idle_spin)
+
         return w
 
     def _save_rounding(self) -> None:
         val = self.rounding_combo.currentData()
         self.repo.set_setting("rounding_minutes", str(val))
+
+    def _save_idle_threshold(self, value: int) -> None:
+        self.repo.set_setting("idle_threshold_minutes", str(value))
+        if self._system_monitor is not None:
+            self._system_monitor.set_idle_threshold(value * 60)
 
     def _build_outlook_tab(self) -> QWidget:
         w = QWidget()
