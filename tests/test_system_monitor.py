@@ -4,7 +4,6 @@ All tests bypass real Windows APIs via injectable dependencies.
 WTS events are simulated by calling _handle_wts_event() directly.
 Idle state is controlled via fake get_last_input_fn.
 """
-import pytest
 from workload_analyzer.services.system_monitor import SystemMonitor
 
 WTS_SESSION_LOCK = 0x7

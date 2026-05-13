@@ -3,6 +3,7 @@ from __future__ import annotations
 
 import ctypes
 import ctypes.wintypes
+import time
 from typing import Callable, Optional
 
 from PyQt6.QtCore import QAbstractNativeEventFilter, QObject, QTimer, pyqtSignal
@@ -60,7 +61,7 @@ class SystemMonitor(QObject, QAbstractNativeEventFilter):
         self._wts_register = wts_register_fn or self._default_register
         self._wts_unregister = wts_unregister_fn or self._default_unregister
         self._get_last_input = get_last_input_fn or self._default_get_last_input
-        self._clock = clock or (lambda: int(__import__("time").time()))
+        self._clock = clock or (lambda: int(time.time()))
 
         self._idle_threshold_ms = idle_threshold_seconds * 1000
 
@@ -131,7 +132,8 @@ class SystemMonitor(QObject, QAbstractNativeEventFilter):
 
         elif w_param == WTS_SESSION_UNLOCK and self._locked:
             self._locked = False
-            lock_ts = self._lock_ts or now
+            assert self._lock_ts is not None, "_lock_ts must be set when _locked is True"
+            lock_ts = self._lock_ts
             self._lock_ts = None
             self.session_unlocked.emit(lock_ts, now)
 
@@ -181,5 +183,7 @@ class SystemMonitor(QObject, QAbstractNativeEventFilter):
         lii = LASTINPUTINFO()
         lii.cbSize = ctypes.sizeof(lii)
         ctypes.windll.user32.GetLastInputInfo(ctypes.byref(lii))  # type: ignore[attr-defined]
-        elapsed_ms = ctypes.windll.kernel32.GetTickCount() - lii.dwTime  # type: ignore[attr-defined]
+        get_tick = ctypes.windll.kernel32.GetTickCount64  # type: ignore[attr-defined]
+        get_tick.restype = ctypes.c_ulonglong
+        elapsed_ms = get_tick() - lii.dwTime
         return int(elapsed_ms)
