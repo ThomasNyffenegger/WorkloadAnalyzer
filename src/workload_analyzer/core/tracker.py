@@ -86,3 +86,23 @@ class TimeTracker:
         if self._last_category_id is None:
             return
         self.start(self._last_category_id, source=EntrySource.MANUAL)
+
+    def stop_at(self, ts: int) -> Optional[int]:
+        """Stop the running entry at the given timestamp.
+
+        Returns the category_id of the stopped entry, or None if not tracking.
+        Transitions tracker to PAUSED state.
+        """
+        if self._state.kind != TrackerState.Kind.TRACKING:
+            return None
+        open_entry = self.repo.get_open_entry()
+        if open_entry is not None:
+            self.repo.close_entry(open_entry.id, end_ts=ts)
+        prev_cat = self._state.category_id
+        self._last_category_id = prev_cat
+        self._state = TrackerState(
+            kind=TrackerState.Kind.PAUSED,
+            category_id=None,
+            started_at=None,
+        )
+        return prev_cat
