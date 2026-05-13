@@ -5,7 +5,7 @@ from PyQt6.QtWidgets import QApplication, QInputDialog
 
 from workload_analyzer.core.tracker import TimeTracker, TrackerState
 from workload_analyzer.db.connection import connect
-from workload_analyzer.db.repository import Repository
+from workload_analyzer.db.repository import OverlapError, Repository
 from workload_analyzer.models import EntrySource
 from workload_analyzer.paths import db_path
 from workload_analyzer.services.outlook_monitor import OutlookMonitor
@@ -132,8 +132,8 @@ def run() -> int:
         if result == RECOVERY_PREVIOUS and prev_cat_id is not None:
             try:
                 repo.insert_closed_entry(prev_cat_id, absence_start_ts, absence_end_ts, source)
-            except Exception:
-                pass  # overlap guard — don't crash if DB has unexpected state
+            except OverlapError:
+                pass  # overlap guard — entry for this time range already exists
             tracker.start(prev_cat_id, EntrySource.MANUAL)
 
         elif result == RECOVERY_OTHER:
@@ -141,9 +141,12 @@ def run() -> int:
             if chosen_id is not None:
                 try:
                     repo.insert_closed_entry(chosen_id, absence_start_ts, absence_end_ts, source)
-                except Exception:
+                except OverlapError:
                     pass
                 tracker.start(chosen_id, EntrySource.MANUAL)
+            elif prev_cat_id is not None:
+                # Empty category list edge case — fall back to previous category
+                tracker.start(prev_cat_id, EntrySource.MANUAL)
 
         else:  # RECOVERY_DISCARD (or no previous category)
             if prev_cat_id is not None:
