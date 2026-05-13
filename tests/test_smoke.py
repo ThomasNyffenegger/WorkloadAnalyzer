@@ -98,3 +98,84 @@ def test_rejection_learning_flow(tmp_db_path):
     s = repo.list_rejected_suggestions()[0]
     repo.set_silenced(s.id, False)
     assert not repo.is_silenced("Coding", cat_id)
+
+
+def test_screen_lock_recovery_flow(tmp_db_path):
+    """Smoke: tracker stops at lock time; back-fill entry can be inserted."""
+    conn = connect(tmp_db_path)
+    repo = Repository(conn)
+
+    role_id = repo.create_role("Dev")
+    cat_id = repo.create_category("Coding", "#ff0000", role_id)
+
+    clock = FakeClock(ts=1_000_000)
+    tracker = TimeTracker(repo=repo, clock=clock)
+
+    # Start tracking
+    tracker.start(cat_id, EntrySource.MANUAL)
+    clock.advance(30 * 60)  # 30 minutes of work
+
+    # Simulate screen lock — tracker stops at lock time
+    lock_ts = clock.ts
+    returned_cat = tracker.stop_at(lock_ts)
+    assert returned_cat == cat_id
+    assert repo.get_open_entry() is None
+
+    # Simulate 20 minutes away
+    clock.advance(20 * 60)
+    unlock_ts = clock.ts
+
+    # Back-fill the absent time to the previous category
+    repo.insert_closed_entry(
+        cat_id, lock_ts, unlock_ts, EntrySource.SCREEN_LOCK_RECOVERY
+    )
+
+    # Resume tracking
+    tracker.start(cat_id, EntrySource.MANUAL)
+    clock.advance(10 * 60)
+    tracker.pause()
+
+    # Should have 3 closed entries: work before lock, lock recovery, work after unlock
+    all_entries = repo.list_entries_between(0, 9_999_999_999)
+    closed = [e for e in all_entries if not e.is_active()]
+    assert len(closed) == 3
+
+    sources = {e.source for e in closed}
+    assert EntrySource.SCREEN_LOCK_RECOVERY in sources
+
+    conn.close()
+
+
+def test_idle_recovery_discard_flow(tmp_db_path):
+    """Smoke: tracker stops at idle time; discard means no back-fill entry."""
+    conn = connect(tmp_db_path)
+    repo = Repository(conn)
+
+    role_id = repo.create_role("Dev")
+    cat_id = repo.create_category("Coding", "#ff0000", role_id)
+
+    clock = FakeClock(ts=2_000_000)
+    tracker = TimeTracker(repo=repo, clock=clock)
+
+    tracker.start(cat_id, EntrySource.MANUAL)
+    clock.advance(60 * 60)  # 1 hour of work
+
+    # Idle detected
+    idle_ts = clock.ts
+    tracker.stop_at(idle_ts)
+
+    # User returns 15 minutes later — chooses "Verwerfen"
+    clock.advance(15 * 60)
+    # No insert_closed_entry (discard)
+    tracker.start(cat_id, EntrySource.MANUAL)
+    clock.advance(5 * 60)
+    tracker.pause()
+
+    all_entries = repo.list_entries_between(0, 9_999_999_999)
+    closed = [e for e in all_entries if not e.is_active()]
+    # Only 2 entries: before idle and after return (no idle_recovery entry)
+    assert len(closed) == 2
+    sources = {e.source for e in closed}
+    assert EntrySource.IDLE_RECOVERY not in sources
+
+    conn.close()
