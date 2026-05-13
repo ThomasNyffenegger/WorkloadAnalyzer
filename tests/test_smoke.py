@@ -79,3 +79,22 @@ def test_full_tracking_and_export_flow(tmp_db_path, tmp_path: Path):
     assert xlsx_path.exists(), "XLSX export file was not created"
 
     conn.close()
+
+
+def test_rejection_learning_flow(tmp_db_path):
+    """Smoke: record 3 rejections → silenced, then reactivate."""
+    from workload_analyzer.db.connection import connect
+    from workload_analyzer.db.repository import Repository
+
+    repo = Repository(connect(tmp_db_path))
+    role_id = repo.create_role("Dev")
+    cat_id = repo.create_category("Coding", "#ff0000", role_id, outlook_category_name="Coding")
+
+    assert not repo.is_silenced("Coding", cat_id)
+    for _ in range(3):
+        repo.record_rejection("Coding", cat_id)
+    assert repo.is_silenced("Coding", cat_id)
+
+    s = repo.list_rejected_suggestions()[0]
+    repo.set_silenced(s.id, False)
+    assert not repo.is_silenced("Coding", cat_id)
