@@ -5,7 +5,7 @@ import datetime
 from pathlib import Path
 from typing import Optional
 
-from PyQt6.QtCore import Qt, QDateTime
+from PyQt6.QtCore import Qt, QDate, QDateTime
 from PyQt6.QtWidgets import (
     QDialog, QVBoxLayout, QHBoxLayout, QLabel, QPushButton,
     QDateEdit, QTabWidget, QWidget, QTableWidget, QTableWidgetItem,
@@ -14,12 +14,11 @@ from PyQt6.QtWidgets import (
 
 from workload_analyzer.db.repository import Repository
 from workload_analyzer.core.rounding import round_seconds
-from workload_analyzer.services.export import export_csv, export_xlsx
+from workload_analyzer.services.export import export_csv, export_xlsx, export_xlsx_pivot
 
 
-def _py_date_to_qdate(d: "datetime.date"):
+def _py_date_to_qdate(d: datetime.date) -> QDate:
     """Convert a Python date to QDate."""
-    from PyQt6.QtCore import QDate
     return QDate(d.year, d.month, d.day)
 
 
@@ -301,31 +300,28 @@ class ReportsWindow(QDialog):
     # ------------------------------------------------------------------
 
     def _select_today(self) -> None:
-        today = QDateTime.currentDateTime().date()
+        today = _py_date_to_qdate(datetime.date.today())
         self._from_edit.setDate(today)
         self._to_edit.setDate(today)
         self._refresh()
 
     def _select_this_week(self) -> None:
-        import datetime as _dt
-        today = _dt.date.today()
-        monday = today - _dt.timedelta(days=today.weekday())  # weekday() 0 = Monday
+        today = datetime.date.today()
+        monday = today - datetime.timedelta(days=today.weekday())  # weekday() 0 = Monday
         self._from_edit.setDate(_py_date_to_qdate(monday))
-        self._to_edit.setDate(QDateTime.currentDateTime().date())
+        self._to_edit.setDate(_py_date_to_qdate(today))
         self._refresh()
 
     def _select_this_month(self) -> None:
-        import datetime as _dt
-        today = _dt.date.today()
+        today = datetime.date.today()
         first = today.replace(day=1)
         self._from_edit.setDate(_py_date_to_qdate(first))
-        self._to_edit.setDate(QDateTime.currentDateTime().date())
+        self._to_edit.setDate(_py_date_to_qdate(today))
         self._refresh()
 
     def _select_last_month(self) -> None:
-        import datetime as _dt
-        today = _dt.date.today()
-        last_day_prev = today.replace(day=1) - _dt.timedelta(days=1)
+        today = datetime.date.today()
+        last_day_prev = today.replace(day=1) - datetime.timedelta(days=1)
         first_day_prev = last_day_prev.replace(day=1)
         self._from_edit.setDate(_py_date_to_qdate(first_day_prev))
         self._to_edit.setDate(_py_date_to_qdate(last_day_prev))
@@ -339,7 +335,6 @@ class ReportsWindow(QDialog):
             return
         from_ts, to_ts = self._range_ts()
         rounding = int(self._repo.get_setting("rounding_minutes", "0") or "0")
-        from workload_analyzer.services.export import export_xlsx_pivot
         export_xlsx_pivot(self._repo, from_ts, to_ts, rounding, Path(path))
         QMessageBox.information(self, "Export", f"Pivot XLSX gespeichert:\n{path}")
 
