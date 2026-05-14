@@ -128,12 +128,9 @@ def export_xlsx_pivot(
         cat = cats[cat_id]
         cell = ws.cell(row=1, column=col_idx, value=cat.name)
         cell.font = Font(bold=True)
-        try:
+        if cat.color and len(cat.color.lstrip("#")) == 6:
             hex_color = cat.color.lstrip("#")
-            if len(hex_color) == 6:
-                cell.fill = PatternFill(fill_type="solid", fgColor=hex_color)
-        except Exception:
-            pass
+            cell.fill = PatternFill(fill_type="solid", fgColor=hex_color)
     ws.cell(row=1, column=total_col, value="Total").font = Font(bold=True)
 
     # Data rows (one per day)
@@ -151,7 +148,7 @@ def export_xlsx_pivot(
     ws.cell(row=total_row, column=1, value="Total").font = Font(bold=True)
     grand_total = 0.0
     for col_idx, cat_id in enumerate(used_cat_ids, start=2):
-        col_total = round(sum(totals.get((day, cat_id), 0.0) for day in days), 1)
+        col_total = round(sum(round(totals.get((day, cat_id), 0.0), 1) for day in days), 1)
         ws.cell(row=total_row, column=col_idx, value=col_total).font = Font(bold=True)
         grand_total += col_total
     ws.cell(row=total_row, column=total_col, value=round(grand_total, 1)).font = Font(bold=True)
