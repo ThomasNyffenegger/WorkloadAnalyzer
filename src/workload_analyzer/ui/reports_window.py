@@ -17,6 +17,12 @@ from workload_analyzer.core.rounding import round_seconds
 from workload_analyzer.services.export import export_csv, export_xlsx
 
 
+def _py_date_to_qdate(d: "datetime.date"):
+    """Convert a Python date to QDate."""
+    from PyQt6.QtCore import QDate
+    return QDate(d.year, d.month, d.day)
+
+
 class ReportsWindow(QDialog):
     """Modal-less reports dialog. Shows table of entries + donut chart."""
 
@@ -33,6 +39,19 @@ class ReportsWindow(QDialog):
 
         # --- Toolbar row ---
         toolbar = QHBoxLayout()
+
+        # Schnellauswahl buttons
+        for label, slot in [
+            ("Heute",        self._select_today),
+            ("Diese Woche",  self._select_this_week),
+            ("Diesen Monat", self._select_this_month),
+            ("Letzten Monat",self._select_last_month),
+        ]:
+            btn = QPushButton(label)
+            btn.clicked.connect(slot)
+            toolbar.addWidget(btn)
+
+        toolbar.addSpacing(12)
         toolbar.addWidget(QLabel("Von:"))
         self._from_edit = QDateEdit()
         self._from_edit.setCalendarPopup(True)
@@ -60,6 +79,10 @@ class ReportsWindow(QDialog):
         export_xlsx_btn = QPushButton("Export XLSX")
         export_xlsx_btn.clicked.connect(self._export_xlsx)
         toolbar.addWidget(export_xlsx_btn)
+
+        export_pivot_btn = QPushButton("Export Pivot XLSX")
+        export_pivot_btn.clicked.connect(self._export_xlsx_pivot)
+        toolbar.addWidget(export_pivot_btn)
 
         layout.addLayout(toolbar)
 
@@ -272,6 +295,53 @@ class ReportsWindow(QDialog):
         rounding = int(self._repo.get_setting("rounding_minutes", "0") or "0")
         export_xlsx(self._repo, from_ts, to_ts, rounding, Path(path))
         QMessageBox.information(self, "Export", f"Excel gespeichert:\n{path}")
+
+    # ------------------------------------------------------------------
+    # Schnellauswahl helpers
+    # ------------------------------------------------------------------
+
+    def _select_today(self) -> None:
+        today = QDateTime.currentDateTime().date()
+        self._from_edit.setDate(today)
+        self._to_edit.setDate(today)
+        self._refresh()
+
+    def _select_this_week(self) -> None:
+        import datetime as _dt
+        today = _dt.date.today()
+        monday = today - _dt.timedelta(days=today.weekday())  # weekday() 0 = Monday
+        self._from_edit.setDate(_py_date_to_qdate(monday))
+        self._to_edit.setDate(QDateTime.currentDateTime().date())
+        self._refresh()
+
+    def _select_this_month(self) -> None:
+        import datetime as _dt
+        today = _dt.date.today()
+        first = today.replace(day=1)
+        self._from_edit.setDate(_py_date_to_qdate(first))
+        self._to_edit.setDate(QDateTime.currentDateTime().date())
+        self._refresh()
+
+    def _select_last_month(self) -> None:
+        import datetime as _dt
+        today = _dt.date.today()
+        last_day_prev = today.replace(day=1) - _dt.timedelta(days=1)
+        first_day_prev = last_day_prev.replace(day=1)
+        self._from_edit.setDate(_py_date_to_qdate(first_day_prev))
+        self._to_edit.setDate(_py_date_to_qdate(last_day_prev))
+        self._refresh()
+
+    def _export_xlsx_pivot(self) -> None:
+        path, _ = QFileDialog.getSaveFileName(
+            self, "Pivot XLSX speichern", "", "Excel-Dateien (*.xlsx)"
+        )
+        if not path:
+            return
+        from_ts, to_ts = self._range_ts()
+        rounding = int(self._repo.get_setting("rounding_minutes", "0") or "0")
+        from workload_analyzer.services.export import export_xlsx_pivot
+        export_xlsx_pivot(self._repo, from_ts, to_ts, rounding, Path(path))
+        QMessageBox.information(self, "Export", f"Pivot XLSX gespeichert:\n{path}")
 
 
 class _EntryEditDialog(QDialog):
