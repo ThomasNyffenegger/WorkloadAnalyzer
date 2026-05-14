@@ -17,9 +17,44 @@
 
 ---
 
+## Spec-Schulden (aus Phase-1-Spec, nie implementiert)
+
+Features die in `specs/2026-05-11-workload-analyzer-design.md` beschrieben sind, aber in keinem Plan standen und fehlen:
+
+| Feature | Spec-Abschnitt | Status |
+|---------|---------------|--------|
+| **Packaging** — PyInstaller + Inno Setup Windows-Installer | §2 Tech Stack | ❌ fehlt |
+| **Hotkeys** — `Ctrl+Shift+1..9` für Schnellkategorien (Kategorie 1–9 direkt wechseln) | §4.4 Settings | ❌ fehlt |
+| **Backup** — konfigurierbarer Backup-Pfad + automatisches Backup beim Start | §4.4 Settings | ❌ fehlt |
+| **Autostart** — App mit Windows starten (Registry `HKCU\...\Run`) | §4.4 Settings | ❌ fehlt |
+| **Tray-Reminder** — pulsierendes Icon nach 2h ohne Kategoriewechsel | §4.4 Tray | ❌ fehlt (orange bei Outlook-Verlust ist ✅) |
+
+Bereits implementiert (fälschlicherweise als fehlend gemeldet):
+- ✅ „Aus Outlook importieren" in Settings — Phase 2 (`ImportOutlookDialog`)
+- ✅ `rejected_suggestions` reaktivierbar — Phase 2 (Reaktivieren-Button in Settings)
+
+**Empfehlung:** Spec-Schulden als eigene kompakte Phase (z.B. „Phase 5: Produktionsreife") bündeln — passt gut zusammen (Hotkeys + Autostart + Backup + Packaging sind alle Einstellungs-/Infrastruktur-Themen).
+
+---
+
 ## Vorgeschlagene nächste Phasen
 
-### Phase 5 — Tagesansicht (Timeline)
+### Phase 5 — Produktionsreife (Spec-Schulden)
+**Aufwand:** Gering–Mittel | **Wert:** Hoch (Nutzbarkeit im Alltag)
+
+Bündelt alle offenen Spec-Schulden aus Phase 1 zu einer deployable App:
+
+- **Autostart:** Registry-Eintrag `HKCU\Software\Microsoft\Windows\CurrentVersion\Run` → Checkbox in Einstellungen
+- **Backup:** Einstellbarer Backup-Pfad + automatisches Kopieren der SQLite-DB beim Start (mit Zeitstempel)
+- **Hotkeys:** `Ctrl+Shift+1..9` wechseln direkt zur n-ten Kategorie — via `QShortcut` (kein externer Hook nötig)
+- **Tray-Reminder:** Pulsierendes Icon (Timer-basierter Icon-Wechsel) wenn > 2h keine Kategorieänderung
+- **Packaging:** PyInstaller → `.exe`, Inno Setup → Windows-Installer `.exe`
+
+Keine DB-Änderungen, keine neuen Fenster.
+
+---
+
+### Phase 6 — Tagesansicht (Timeline)
 **Aufwand:** Mittel | **Wert:** Hoch
 
 Visuelle Tages-Timeline im Berichte-Fenster (neuer Tab). Zeigt Zeitblöcke als horizontales Gantt-Diagramm über 24h, farblich nach Kategorie. Ideal um auf einen Blick zu sehen, wie der Tag verteilt war — und wo Lücken (unerfasste Zeit) sind.
@@ -30,7 +65,7 @@ Visuelle Tages-Timeline im Berichte-Fenster (neuer Tab). Zeigt Zeitblöcke als h
 
 ---
 
-### Phase 6 — Ziele & Budgets
+### Phase 7 — Ziele & Budgets
 **Aufwand:** Mittel | **Wert:** Hoch
 
 Wöchentliche Stundenbudgets pro Kategorie oder Rolle definieren. Fortschritt wird in Berichte und optional im Floating Widget angezeigt (z.B. "Coding: 12/20h").
@@ -42,7 +77,7 @@ Wöchentliche Stundenbudgets pro Kategorie oder Rolle definieren. Fortschritt wi
 
 ---
 
-### Phase 7 — Aktives-Fenster-Tracking
+### Phase 8 — Aktives-Fenster-Tracking
 **Aufwand:** Mittel | **Wert:** Hoch
 
 Überwacht den Titel des aktiven Fensters (`GetForegroundWindow` / `GetWindowText`) und schlägt automatisch eine Kategorie vor, basierend auf konfigurierbaren Regeln (z.B. "Visual Studio Code" → Coding, "Zoom" → Meetings).
@@ -54,7 +89,7 @@ Wöchentliche Stundenbudgets pro Kategorie oder Rolle definieren. Fortschritt wi
 
 ---
 
-### Phase 8 — Datenpflege & Portabilität
+### Phase 9 — Datenpflege & Portabilität
 **Aufwand:** Gering–Mittel | **Wert:** Mittel
 
 Werkzeuge für langfristige Datenhygiene:
@@ -65,7 +100,7 @@ Werkzeuge für langfristige Datenhygiene:
 
 ---
 
-### Phase 9 — Schnelleingabe & Globaler Hotkey
+### Phase 10 — Schnelleingabe & Globaler Hotkey
 **Aufwand:** Gering | **Wert:** Mittel
 
 Globaler Hotkey (z.B. `Ctrl+Shift+T`) öffnet ein minimales Overlay zum Kategorienwechsel, ohne das Hauptfenster zu öffnen. Ergänzt das Floating Widget für Power-User.
@@ -79,11 +114,12 @@ Globaler Hotkey (z.B. `Ctrl+Shift+T`) öffnet ein minimales Overlay zum Kategori
 ## Empfohlene Reihenfolge
 
 ```
-Phase 5 (Timeline)        ← visueller Impact, baut auf Reports auf
-Phase 7 (Window Tracking) ← reduziert Erfassungsaufwand am stärksten
-Phase 6 (Ziele/Budgets)   ← macht Daten actionable
-Phase 8 (Datenpflege)     ← wichtig für Langzeitnutzung
-Phase 9 (Hotkey)          ← Quality of Life
+Phase 5  (Produktionsreife)  ← Spec-Schulden abbauen, App deploybar machen
+Phase 6  (Timeline)          ← visueller Impact, baut auf Reports auf
+Phase 8  (Window Tracking)   ← reduziert Erfassungsaufwand am stärksten
+Phase 7  (Ziele/Budgets)     ← macht Daten actionable
+Phase 9  (Datenpflege)       ← wichtig für Langzeitnutzung
+Phase 10 (Hotkey/Quick)      ← Quality of Life
 ```
 
 ---
