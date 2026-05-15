@@ -3,7 +3,7 @@ import ctypes.wintypes
 import logging
 from typing import Optional
 
-from PyQt6.QtCore import QAbstractNativeEventFilter, QObject, pyqtSignal
+from PyQt6.QtCore import QAbstractNativeEventFilter, pyqtSignal
 from PyQt6.QtWidgets import QApplication, QWidget
 
 _log = logging.getLogger(__name__)
@@ -30,14 +30,14 @@ class _HotkeyFilter(QAbstractNativeEventFilter):
         return False, 0
 
 
-class GlobalHotkeyManager(QObject):
+class GlobalHotkeyManager(QWidget):
     triggered = pyqtSignal(int)  # emits 1..9
 
-    def __init__(self, parent: Optional[QObject] = None):
+    def __init__(self, parent: Optional[QWidget] = None):
         super().__init__(parent)
         self._registered: list[int] = []
         # Invisible sink widget — keeps a reference alive and provides winId if needed
-        self._sink = QWidget()
+        self._sink = QWidget(self)
         self._sink.setFixedSize(0, 0)
         self._sink.hide()
         self._filter = _HotkeyFilter(self._on_hotkey)
