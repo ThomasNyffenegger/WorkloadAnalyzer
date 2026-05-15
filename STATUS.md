@@ -36,21 +36,6 @@ Alle Spec-Schulden wurden in Phase 5 abgebaut:
 
 ## Vorgeschlagene nächste Phasen
 
-### Phase 5 — Produktionsreife (Spec-Schulden)
-**Aufwand:** Gering–Mittel | **Wert:** Hoch (Nutzbarkeit im Alltag)
-
-Bündelt alle offenen Spec-Schulden aus Phase 1 zu einer deployable App:
-
-- **Autostart:** Registry-Eintrag `HKCU\Software\Microsoft\Windows\CurrentVersion\Run` → Checkbox in Einstellungen
-- **Backup:** Einstellbarer Backup-Pfad + automatisches Kopieren der SQLite-DB beim Start (mit Zeitstempel)
-- **Hotkeys:** `Ctrl+Shift+1..9` wechseln direkt zur n-ten Kategorie — via `QShortcut` (kein externer Hook nötig)
-- **Tray-Reminder:** Pulsierendes Icon (Timer-basierter Icon-Wechsel) wenn > 2h keine Kategorieänderung
-- **Packaging:** PyInstaller → `.exe`, Inno Setup → Windows-Installer `.exe`
-
-Keine DB-Änderungen, keine neuen Fenster.
-
----
-
 ### Phase 6 — Tagesansicht (Timeline)
 **Aufwand:** Mittel | **Wert:** Hoch
 
@@ -111,7 +96,6 @@ Globaler Hotkey (z.B. `Ctrl+Shift+T`) öffnet ein minimales Overlay zum Kategori
 ## Empfohlene Reihenfolge
 
 ```
-Phase 5  (Produktionsreife)  ← Spec-Schulden abbauen, App deploybar machen
 Phase 6  (Timeline)          ← visueller Impact, baut auf Reports auf
 Phase 8  (Window Tracking)   ← reduziert Erfassungsaufwand am stärksten
 Phase 7  (Ziele/Budgets)     ← macht Daten actionable
