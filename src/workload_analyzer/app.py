@@ -1,5 +1,7 @@
+import logging
 import sys
 import time
+from pathlib import Path
 
 from PyQt6.QtWidgets import QApplication, QInputDialog
 
@@ -18,6 +20,13 @@ def run() -> int:
 
     conn = connect(db_path())
     repo = Repository(conn)
+    _backup_path = repo.get_setting("backup_path", "")
+    if _backup_path:
+        try:
+            from workload_analyzer.services.backup import backup
+            backup(db_path(), Path(_backup_path))
+        except Exception as exc:
+            logging.getLogger(__name__).warning("Startup backup failed: %s", exc)
     tracker = TimeTracker(repo=repo, clock=lambda: int(time.time()))
     tracker.load_state()
 
@@ -41,6 +50,19 @@ def run() -> int:
             tracker.start(category_id=cat.id, source=EntrySource.MANUAL)
 
     tray = TrayIcon(repo=repo, tracker=tracker)
+
+    from workload_analyzer.services.hotkey_manager import GlobalHotkeyManager
+    hotkeys = GlobalHotkeyManager()
+    for i in range(1, 10):
+        hotkeys.register(i)
+
+    def _on_hotkey(n: int) -> None:
+        cats = repo.list_categories(active_only=True)
+        if n <= len(cats):
+            tracker.switch_to(cats[n - 1].id, EntrySource.MANUAL)
+            tray.refresh()
+
+    hotkeys.triggered.connect(_on_hotkey)
 
     # ------------------------------------------------------------------
     # Outlook Monitor
@@ -201,6 +223,7 @@ def run() -> int:
     tray.toggle_widget.connect(toggle_widget)
 
     def _quit():
+        hotkeys.unregister_all()
         sys_monitor.stop()
         monitor.stop()
         app.quit()
