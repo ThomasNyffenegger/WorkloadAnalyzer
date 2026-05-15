@@ -8,22 +8,20 @@ _log = logging.getLogger(__name__)
 
 def enable(exe_path: str) -> None:
     try:
-        key = winreg.OpenKey(
+        with winreg.OpenKey(
             winreg.HKEY_CURRENT_USER, _REGISTRY_KEY, 0, winreg.KEY_SET_VALUE
-        )
-        winreg.SetValueEx(key, _APP_NAME, 0, winreg.REG_SZ, exe_path)
-        winreg.CloseKey(key)
+        ) as key:
+            winreg.SetValueEx(key, _APP_NAME, 0, winreg.REG_SZ, exe_path)
     except OSError as e:
         _log.warning("Autostart enable failed: %s", e)
 
 
 def disable() -> None:
     try:
-        key = winreg.OpenKey(
+        with winreg.OpenKey(
             winreg.HKEY_CURRENT_USER, _REGISTRY_KEY, 0, winreg.KEY_SET_VALUE
-        )
-        winreg.DeleteValue(key, _APP_NAME)
-        winreg.CloseKey(key)
+        ) as key:
+            winreg.DeleteValue(key, _APP_NAME)
     except FileNotFoundError:
         pass
     except OSError as e:
@@ -32,9 +30,8 @@ def disable() -> None:
 
 def is_enabled() -> bool:
     try:
-        key = winreg.OpenKey(winreg.HKEY_CURRENT_USER, _REGISTRY_KEY)
-        winreg.QueryValueEx(key, _APP_NAME)
-        winreg.CloseKey(key)
+        with winreg.OpenKey(winreg.HKEY_CURRENT_USER, _REGISTRY_KEY) as key:
+            winreg.QueryValueEx(key, _APP_NAME)
         return True
     except (FileNotFoundError, OSError):
         return False
