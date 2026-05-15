@@ -1,10 +1,12 @@
+import sys
+from pathlib import Path
 from typing import Optional
 
 from PyQt6.QtCore import Qt
 from PyQt6.QtGui import QColor
 from PyQt6.QtWidgets import (
     QCheckBox, QColorDialog, QComboBox, QDialog, QDialogButtonBox,
-    QFormLayout, QHBoxLayout, QInputDialog, QLabel, QLineEdit,
+    QFileDialog, QFormLayout, QHBoxLayout, QInputDialog, QLabel, QLineEdit,
     QListWidget, QListWidgetItem, QMessageBox, QPushButton,
     QSpinBox, QTabWidget, QTableWidget, QTableWidgetItem, QVBoxLayout, QWidget,
 )
@@ -206,6 +208,31 @@ class SettingsWindow(QDialog):
         self._idle_spin.valueChanged.connect(self._save_idle_threshold)
         form.addRow("Idle-Schwellwert:", self._idle_spin)
 
+        # Autostart
+        from workload_analyzer.services import autostart as _autostart
+        self._autostart_checkbox = QCheckBox()
+        is_frozen = getattr(sys, "frozen", False)
+        if is_frozen:
+            self._autostart_checkbox.setChecked(_autostart.is_enabled())
+        else:
+            self._autostart_checkbox.setEnabled(False)
+            self._autostart_checkbox.setToolTip("Nur im installierten Paket verfügbar")
+        self._autostart_checkbox.toggled.connect(self._save_autostart)
+        form.addRow("Mit Windows starten:", self._autostart_checkbox)
+
+        # Backup path
+        backup_row = QHBoxLayout()
+        self._backup_path_edit = QLineEdit()
+        default_backup = str(Path.home() / "Documents" / "WorkloadAnalyzer" / "backups")
+        self._backup_path_edit.setPlaceholderText(default_backup)
+        self._backup_path_edit.setText(self.repo.get_setting("backup_path", ""))
+        self._backup_path_edit.editingFinished.connect(self._save_backup_path)
+        browse_btn = QPushButton("Durchsuchen…")
+        browse_btn.clicked.connect(self._browse_backup_path)
+        backup_row.addWidget(self._backup_path_edit)
+        backup_row.addWidget(browse_btn)
+        form.addRow("Backup-Pfad:", backup_row)
+
         return w
 
     def _save_rounding(self) -> None:
@@ -216,6 +243,22 @@ class SettingsWindow(QDialog):
         self.repo.set_setting("idle_threshold_minutes", str(value))
         if self._system_monitor is not None:
             self._system_monitor.set_idle_threshold(value * 60)
+
+    def _save_autostart(self, checked: bool) -> None:
+        from workload_analyzer.services import autostart as _autostart
+        if checked:
+            _autostart.enable(sys.executable)
+        else:
+            _autostart.disable()
+
+    def _save_backup_path(self) -> None:
+        self.repo.set_setting("backup_path", self._backup_path_edit.text().strip())
+
+    def _browse_backup_path(self) -> None:
+        path = QFileDialog.getExistingDirectory(self, "Backup-Ordner wählen")
+        if path:
+            self._backup_path_edit.setText(path)
+            self._save_backup_path()
 
     def _build_outlook_tab(self) -> QWidget:
         w = QWidget()
