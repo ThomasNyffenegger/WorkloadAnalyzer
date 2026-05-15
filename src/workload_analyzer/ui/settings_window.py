@@ -245,6 +245,8 @@ class SettingsWindow(QDialog):
             self._system_monitor.set_idle_threshold(value * 60)
 
     def _save_autostart(self, checked: bool) -> None:
+        if not getattr(sys, "frozen", False):
+            return
         from workload_analyzer.services import autostart as _autostart
         if checked:
             _autostart.enable(sys.executable)

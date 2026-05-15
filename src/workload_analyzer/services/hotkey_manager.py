@@ -62,3 +62,4 @@ class GlobalHotkeyManager(QObject):
         app = QApplication.instance()
         if app:
             app.removeNativeEventFilter(self._filter)
+        self._sink.destroy()
