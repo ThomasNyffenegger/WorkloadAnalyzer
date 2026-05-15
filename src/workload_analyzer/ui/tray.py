@@ -1,3 +1,4 @@
+import time
 from typing import Optional
 
 from PyQt6.QtCore import QObject, QTimer, pyqtSignal
@@ -31,6 +32,14 @@ class TrayIcon(QObject):
         self.repo = repo
         self.tracker = tracker
         self._outlook_available: bool = True
+        self._last_cat_id: Optional[int] = None
+        self._last_cat_change_ts: float = time.time()
+        self._reminder_active: bool = False
+        self._blink_state: bool = False
+
+        self._blink_timer = QTimer(self)
+        self._blink_timer.setInterval(2000)
+        self._blink_timer.timeout.connect(self._on_blink)
 
         self.icon = QSystemTrayIcon(_make_color_icon("#888888"))
         self.icon.setToolTip("WorkloadAnalyzer")
@@ -98,33 +107,63 @@ class TrayIcon(QObject):
     def refresh(self) -> None:
         self._refresh_switch_menu()
         state = self.tracker.current_state()
+
+        # Reminder state tracking
+        current_cat_id = state.category_id if state.kind == TrackerState.Kind.TRACKING else None
+        if current_cat_id != self._last_cat_id:
+            self._last_cat_id = current_cat_id
+            self._last_cat_change_ts = time.time()
+            self._reminder_active = False
+            self._blink_state = False
+            self._blink_timer.stop()
+        elif not self._reminder_active and time.time() - self._last_cat_change_ts > 7200:
+            self._reminder_active = True
+            self._blink_timer.start()
+
         if state.kind == TrackerState.Kind.TRACKING and state.category_id is not None:
             cat = self.repo.get_category(state.category_id)
             if cat:
                 role = self.repo.get_role(cat.role_id)
                 role_name = role.name if role else ""
                 self._header_action.setText(f"{cat.name} ({role_name})")
-                self.icon.setIcon(_make_color_icon(cat.color))
                 self.icon.setToolTip(f"Tracking: {cat.name}")
             self._pause_action.setEnabled(True)
             self._resume_action.setEnabled(False)
         elif state.kind == TrackerState.Kind.PAUSED:
             self._header_action.setText("Paused")
-            self.icon.setIcon(_make_color_icon("#cccc44"))
             self.icon.setToolTip("WorkloadAnalyzer (paused)")
             self._pause_action.setEnabled(False)
             self._resume_action.setEnabled(True)
         else:
             self._header_action.setText("Not tracking")
-            self.icon.setIcon(_make_color_icon("#888888"))
             self.icon.setToolTip("WorkloadAnalyzer")
             self._pause_action.setEnabled(False)
             self._resume_action.setEnabled(False)
 
-        # Override icon colour when Outlook is unreachable
+        if not self._outlook_available:
+            self.icon.setToolTip(self.icon.toolTip() + " ⚠ Outlook nicht verfügbar")
+
+        self._apply_icon(state)
+
+    def _on_blink(self) -> None:
+        self._blink_state = not self._blink_state
+        self._apply_icon(self.tracker.current_state())
+
+    def _apply_icon(self, state) -> None:
         if not self._outlook_available:
             self.icon.setIcon(_make_color_icon("#ff8800"))
-            self.icon.setToolTip(self.icon.toolTip() + " ⚠ Outlook nicht verfügbar")
+            return
+        if state.kind == TrackerState.Kind.TRACKING and state.category_id is not None:
+            cat = self.repo.get_category(state.category_id)
+            if cat:
+                color = "#888888" if (self._reminder_active and self._blink_state) else cat.color
+                self.icon.setIcon(_make_color_icon(color))
+            else:
+                self.icon.setIcon(_make_color_icon("#888888"))
+        elif state.kind == TrackerState.Kind.PAUSED:
+            self.icon.setIcon(_make_color_icon("#cccc44"))
+        else:
+            self.icon.setIcon(_make_color_icon("#888888"))
 
     def _on_pause(self) -> None:
         self.tracker.pause()
