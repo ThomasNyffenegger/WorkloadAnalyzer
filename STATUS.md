@@ -4,7 +4,7 @@
 
 ---
 
-## Fertig (Phase 1–4)
+## Fertig (Phase 1–5)
 
 | Phase | Feature | Plan | Spec |
 |-------|---------|------|------|
@@ -12,8 +12,9 @@
 | 2 | **Outlook-Integration** — COM-basierter OutlookMonitor, Vorschlag-Popup (SuggestionPopup), Kalender-Import-Dialog, Outlook-Tab in Einstellungen | `plans/2026-05-12-outlook-integration.md` | `specs/2026-05-12-outlook-integration-design.md` |
 | 3 | **System Monitoring** — Bildschirmsperre (WTS-Events), Idle-Erkennung (GetLastInputInfo), RecoveryPopup (vorherige/andere/verwerfen), `stop_at()` im Tracker, Idle-Schwellwert in Einstellungen | `plans/2026-05-13-system-monitoring.md` | `specs/2026-05-13-system-monitoring-design.md` |
 | 4 | **Berichte & Analysen** — `export_xlsx_pivot()` (Tage × Kategorien XLSX), 4 Schnellauswahl-Buttons (Heute/Diese Woche/Diesen Monat/Letzten Monat), Export-Pivot-XLSX-Button | `plans/2026-05-14-reports-analytics.md` | `specs/2026-05-14-reports-analytics-design.md` |
+| 5 | **Produktionsreife** — Autostart (Registry), Backup (startup copy), Globale Hotkeys (Ctrl+Shift+1..9), Tray-Reminder (blink nach 2h), PyInstaller+Inno Setup Installer | `plans/2026-05-14-production-readiness.md` | `specs/2026-05-14-production-readiness-design.md` |
 
-**Tests:** 109 passing. Stack: Python 3.11+, PyQt6, SQLite, openpyxl, pytest.
+**Tests:** 123 passing. Stack: Python 3.11+, PyQt6, SQLite, openpyxl, pytest.
 
 ---
 
