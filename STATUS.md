@@ -18,23 +18,19 @@
 
 ---
 
-## Spec-Schulden (aus Phase-1-Spec, nie implementiert)
+## Spec-Schulden (aus Phase-1-Spec)
 
-Features die in `specs/2026-05-11-workload-analyzer-design.md` beschrieben sind, aber in keinem Plan standen und fehlen:
+Alle Spec-Schulden wurden in Phase 5 abgebaut:
 
-| Feature | Spec-Abschnitt | Status |
-|---------|---------------|--------|
-| **Packaging** — PyInstaller + Inno Setup Windows-Installer | §2 Tech Stack | ❌ fehlt |
-| **Hotkeys** — `Ctrl+Shift+1..9` für Schnellkategorien (Kategorie 1–9 direkt wechseln) | §4.4 Settings | ❌ fehlt |
-| **Backup** — konfigurierbarer Backup-Pfad + automatisches Backup beim Start | §4.4 Settings | ❌ fehlt |
-| **Autostart** — App mit Windows starten (Registry `HKCU\...\Run`) | §4.4 Settings | ❌ fehlt |
-| **Tray-Reminder** — pulsierendes Icon nach 2h ohne Kategoriewechsel | §4.4 Tray | ❌ fehlt (orange bei Outlook-Verlust ist ✅) |
-
-Bereits implementiert (fälschlicherweise als fehlend gemeldet):
-- ✅ „Aus Outlook importieren" in Settings — Phase 2 (`ImportOutlookDialog`)
-- ✅ `rejected_suggestions` reaktivierbar — Phase 2 (Reaktivieren-Button in Settings)
-
-**Empfehlung:** Spec-Schulden als eigene kompakte Phase (z.B. „Phase 5: Produktionsreife") bündeln — passt gut zusammen (Hotkeys + Autostart + Backup + Packaging sind alle Einstellungs-/Infrastruktur-Themen).
+| Feature | Status |
+|---------|--------|
+| **Packaging** — PyInstaller + Inno Setup Windows-Installer | ✅ Phase 5 |
+| **Hotkeys** — `Ctrl+Shift+1..9` für Schnellkategorien | ✅ Phase 5 |
+| **Backup** — konfigurierbarer Backup-Pfad + automatisches Backup beim Start | ✅ Phase 5 |
+| **Autostart** — App mit Windows starten (Registry `HKCU\...\Run`) | ✅ Phase 5 |
+| **Tray-Reminder** — pulsierendes Icon nach 2h ohne Kategoriewechsel | ✅ Phase 5 |
+| „Aus Outlook importieren" in Settings | ✅ Phase 2 |
+| `rejected_suggestions` reaktivierbar | ✅ Phase 2 |
 
 ---
 
