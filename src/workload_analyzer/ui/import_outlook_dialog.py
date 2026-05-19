@@ -103,7 +103,17 @@ class ImportOutlookDialog(QDialog):
         layout.addWidget(self._btns)
 
     def _toggle_all(self) -> None:
-        self._all_selected = not self._all_selected
+        # Derive state from actual checkboxes instead of cached flag
+        checked_states = []
+        for row in range(self._table.rowCount()):
+            cb_cell = self._table.cellWidget(row, 2)
+            if cb_cell:
+                cb = cb_cell.findChild(QCheckBox)
+                if cb:
+                    checked_states.append(cb.isChecked())
+
+        # If all are checked, uncheck all; otherwise check all
+        self._all_selected = not all(checked_states) if checked_states else True
         for row in range(self._table.rowCount()):
             cb_cell = self._table.cellWidget(row, 2)
             if cb_cell:
