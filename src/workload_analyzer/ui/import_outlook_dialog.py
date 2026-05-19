@@ -156,6 +156,7 @@ class ImportOutlookDialog(QDialog):
 
             # Column 0: name
             self._table.setItem(row, 0, QTableWidgetItem(name))
+            self._table.item(row, 0).setData(Qt.ItemDataRole.UserRole, (name, color_hex))
 
             # Column 1: colour swatch
             dot = QLabel()
@@ -199,7 +200,7 @@ class ImportOutlookDialog(QDialog):
             if not cb or not cb.isChecked():
                 continue
 
-            outlook_name, color_hex = self._outlook_data[row]
+            outlook_name, color_hex = self._table.item(row, 0).data(Qt.ItemDataRole.UserRole)
             combo: QComboBox = self._table.cellWidget(row, 3)
             app_cat_id: Optional[int] = combo.currentData()
 
