@@ -6,8 +6,8 @@ from typing import Optional
 from PyQt6.QtCore import Qt
 from PyQt6.QtWidgets import (
     QCheckBox, QComboBox, QDialog, QDialogButtonBox, QHBoxLayout,
-    QHeaderView, QLabel, QMessageBox, QTableWidget, QTableWidgetItem,
-    QVBoxLayout, QWidget,
+    QHeaderView, QLabel, QMessageBox, QPushButton, QTableWidget,
+    QTableWidgetItem, QVBoxLayout, QWidget,
 )
 
 from workload_analyzer.db.repository import Repository
@@ -72,20 +72,47 @@ class ImportOutlookDialog(QDialog):
 
     def _build_ui(self) -> None:
         layout = QVBoxLayout(self)
-        layout.addWidget(QLabel("Wähle Outlook-Kategorien zum Importieren aus:"))
+
+        top_row = QHBoxLayout()
+        top_row.addWidget(QLabel("Wähle Outlook-Kategorien zum Importieren aus:"))
+        self._select_all_btn = QPushButton("Alle auswählen")
+        self._select_all_btn.clicked.connect(self._toggle_all)
+        self._all_selected = False
+        top_row.addWidget(self._select_all_btn)
+        layout.addLayout(top_row)
 
         self._table = QTableWidget(0, 4)
         self._table.setHorizontalHeaderLabels(["Outlook-Name", "Farbe", "Importieren", "App-Kategorie"])
         self._table.horizontalHeader().setSectionResizeMode(QHeaderView.ResizeMode.Stretch)
         self._table.setEditTriggers(QTableWidget.EditTrigger.NoEditTriggers)
+        self._table.setSortingEnabled(True)
         layout.addWidget(self._table)
 
-        btns = QDialogButtonBox(
+        # Warning label — only visible when no roles exist
+        self._no_role_label = QLabel("⚠ Bitte zuerst eine Rolle anlegen.")
+        self._no_role_label.setStyleSheet("color: #cc6600;")
+        self._no_role_label.setVisible(not self._roles)
+        layout.addWidget(self._no_role_label)
+
+        self._btns = QDialogButtonBox(
             QDialogButtonBox.StandardButton.Ok | QDialogButtonBox.StandardButton.Cancel
         )
-        btns.accepted.connect(self._save)
-        btns.rejected.connect(self.reject)
-        layout.addWidget(btns)
+        self._btns.button(QDialogButtonBox.StandardButton.Ok).setEnabled(bool(self._roles))
+        self._btns.accepted.connect(self._save)
+        self._btns.rejected.connect(self.reject)
+        layout.addWidget(self._btns)
+
+    def _toggle_all(self) -> None:
+        self._all_selected = not self._all_selected
+        for row in range(self._table.rowCount()):
+            cb_cell = self._table.cellWidget(row, 2)
+            if cb_cell:
+                cb = cb_cell.findChild(QCheckBox)
+                if cb:
+                    cb.setChecked(self._all_selected)
+        self._select_all_btn.setText(
+            "Alle abwählen" if self._all_selected else "Alle auswählen"
+        )
 
     def _load_outlook_categories(self) -> None:
         try:
