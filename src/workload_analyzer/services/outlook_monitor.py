@@ -6,7 +6,10 @@ the main thread during calendar iteration.
 from __future__ import annotations
 
 import datetime
+import logging
 from typing import Callable, Optional
+
+_log = logging.getLogger(__name__)
 
 from PyQt6.QtCore import QMetaObject, QObject, QThread, QTimer, Qt, pyqtSignal, pyqtSlot
 
@@ -82,8 +85,8 @@ class _OutlookWorker(QObject):
                 cats = inspector.CurrentItem.Categories
                 if cats:
                     category = cats.split(",")[0].strip() or None
-        except Exception:
-            pass
+        except Exception as exc:
+            _log.debug("_check_inspector error: %s", exc)
 
         if category != self._last_category:
             self._last_category = category
@@ -105,10 +108,11 @@ class _OutlookWorker(QObject):
                         cats = item.Categories
                         outlook_cat = cats.split(",")[0].strip() if cats else None
                         break
-                except Exception:
+                except Exception as exc:
+                    _log.debug("_check_meeting item error: %s", exc)
                     continue
-        except Exception:
-            pass
+        except Exception as exc:
+            _log.debug("_check_meeting namespace error: %s", exc)
 
         if title is not None and not self._in_meeting:
             self._in_meeting = True
@@ -153,6 +157,8 @@ class OutlookMonitor(QObject):
         self._request_interval.connect(self._worker.update_interval)
 
     def start(self, interval_seconds: int = 15) -> None:
+        if self._thread.isRunning():
+            return
         self._worker._interval_ms = interval_seconds * 1000
         self._thread.start()
 
