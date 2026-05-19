@@ -77,7 +77,8 @@ class SuggestionPopup(QDialog):
             self.done(SUGGESTION_YES)
 
     def done(self, result: int) -> None:
-        self._auto_timer.stop()
+        if self._auto_timer.isActive():
+            self._auto_timer.stop()
         super().done(result)
 
 

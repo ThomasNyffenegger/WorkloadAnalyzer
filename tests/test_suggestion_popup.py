@@ -1,7 +1,9 @@
 """Tests for SuggestionPopup auto-close countdown."""
 import pytest
 from PyQt6.QtCore import QTimer
-from workload_analyzer.ui.suggestion_popup import SuggestionPopup, SUGGESTION_YES
+from workload_analyzer.ui.suggestion_popup import (
+    SuggestionPopup, SUGGESTION_YES, SUGGESTION_NO,
+)
 
 
 def test_yes_button_shows_countdown(qtbot):
@@ -46,3 +48,11 @@ def test_timer_stops_on_manual_close(qtbot):
     assert popup._auto_timer.isActive()
     popup.done(SUGGESTION_YES)
     assert not popup._auto_timer.isActive()
+
+
+def test_done_called_twice_does_not_crash(qtbot):
+    popup = SuggestionPopup("Meetings", "Besprechungen")
+    qtbot.addWidget(popup)
+    popup.show()
+    popup.done(SUGGESTION_YES)
+    popup.done(SUGGESTION_NO)  # must not raise or crash
