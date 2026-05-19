@@ -150,7 +150,7 @@ class FloatingWidget(QWidget):
         if state.kind == TrackerState.Kind.TRACKING and state.category_id is not None:
             cat = self.repo.get_category(state.category_id)
             role = self.repo.get_role(cat.role_id) if cat else None
-            cat_color = cat.color if cat else "#444"
+            cat_color = (cat.color if cat and cat.color else None) or "#444"
             cat_name = cat.name if cat else "?"
             role_name = role.name if role else ""
             self._cat_label.setText(f"{cat_name}  ·  {role_name}")
