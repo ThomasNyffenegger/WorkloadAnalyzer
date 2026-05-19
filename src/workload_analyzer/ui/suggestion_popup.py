@@ -3,7 +3,7 @@ from __future__ import annotations
 
 from typing import Optional
 
-from PyQt6.QtCore import Qt
+from PyQt6.QtCore import Qt, QTimer
 from PyQt6.QtWidgets import (
     QComboBox, QDialog, QHBoxLayout, QLabel, QPushButton, QVBoxLayout,
 )
@@ -16,11 +16,14 @@ SUGGESTION_NO = 2
 SUGGESTION_NEVER = 3
 
 
-class SuggestionPopup(QDialog):
-    """Non-auto-closing popup asking whether to accept an Outlook category suggestion.
+_COUNTDOWN_SECONDS = 10
 
-    Call exec() and check the return code against SUGGESTION_YES / SUGGESTION_NO /
-    SUGGESTION_NEVER.
+
+class SuggestionPopup(QDialog):
+    """Popup asking whether to accept an Outlook category suggestion.
+
+    Auto-closes after 10 seconds accepting the suggestion (SUGGESTION_YES).
+    The "Ja" button shows a live countdown.
     """
 
     def __init__(
@@ -47,19 +50,35 @@ class SuggestionPopup(QDialog):
         layout.addWidget(label)
 
         btns = QHBoxLayout()
-        yes_btn = QPushButton("Ja")
+        self._yes_btn = QPushButton(f"Ja ({_COUNTDOWN_SECONDS})")
         no_btn = QPushButton("Nein")
         never_btn = QPushButton("Nie mehr")
 
-        yes_btn.setDefault(True)
-        yes_btn.clicked.connect(lambda: self.done(SUGGESTION_YES))
+        self._yes_btn.setDefault(True)
+        self._yes_btn.clicked.connect(lambda: self.done(SUGGESTION_YES))
         no_btn.clicked.connect(lambda: self.done(SUGGESTION_NO))
         never_btn.clicked.connect(lambda: self.done(SUGGESTION_NEVER))
 
-        btns.addWidget(yes_btn)
+        btns.addWidget(self._yes_btn)
         btns.addWidget(no_btn)
         btns.addWidget(never_btn)
         layout.addLayout(btns)
+
+        self._countdown = _COUNTDOWN_SECONDS
+        self._auto_timer = QTimer(self)
+        self._auto_timer.setInterval(1000)
+        self._auto_timer.timeout.connect(self._tick)
+        self._auto_timer.start()
+
+    def _tick(self) -> None:
+        self._countdown -= 1
+        self._yes_btn.setText(f"Ja ({self._countdown})")
+        if self._countdown <= 0:
+            self.done(SUGGESTION_YES)
+
+    def done(self, result: int) -> None:
+        self._auto_timer.stop()
+        super().done(result)
 
 
 class MeetingCategoryDialog(QDialog):

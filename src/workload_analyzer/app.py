@@ -77,7 +77,9 @@ def run() -> int:
         )
         cat = repo.find_category_by_outlook_name(outlook_name)
         if cat is None:
-            return
+            return  # No mapping — suppress
+        if cat.id == tracker.current_state().category_id:
+            return  # Already on this category — suppress
         if repo.is_silenced(outlook_name, cat.id):
             return
         # Close any previously open popup (treated as rejection)
