@@ -46,6 +46,8 @@ class TrayIcon(QObject):
 
         self._build_menu()
         self.icon.show()
+        self.icon.activated.connect(self._on_tray_activated)
+        self._widget_visible: bool = True
 
         # Refresh tooltip and menu state every 5 seconds.
         self._timer = QTimer(self)
@@ -76,9 +78,9 @@ class TrayIcon(QObject):
 
         self.menu.addSeparator()
 
-        widget_action = QAction("Toggle floating widget", self.menu)
-        widget_action.triggered.connect(self.toggle_widget.emit)
-        self.menu.addAction(widget_action)
+        self._widget_action = QAction("Widget ausblenden", self.menu)
+        self._widget_action.triggered.connect(self.toggle_widget.emit)
+        self.menu.addAction(self._widget_action)
 
         reports_action = QAction("Reports…", self.menu)
         reports_action.triggered.connect(self.open_reports.emit)
@@ -173,3 +175,14 @@ class TrayIcon(QObject):
         """Called when OutlookMonitor reports availability change."""
         self._outlook_available = available
         self.refresh()
+
+    def set_widget_visible(self, visible: bool) -> None:
+        """Update menu label to reflect floating widget visibility."""
+        self._widget_visible = visible
+        self._widget_action.setText(
+            "Widget ausblenden" if visible else "Widget anzeigen"
+        )
+
+    def _on_tray_activated(self, reason: QSystemTrayIcon.ActivationReason) -> None:
+        if reason == QSystemTrayIcon.ActivationReason.DoubleClick:
+            self.toggle_widget.emit()

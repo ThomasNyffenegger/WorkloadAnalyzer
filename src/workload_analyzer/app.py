@@ -214,11 +214,19 @@ def run() -> int:
     def toggle_widget():
         nonlocal floating_widget
         from workload_analyzer.ui.floating_widget import FloatingWidget
-        if floating_widget is None or not floating_widget.isVisible():
+        if floating_widget is None:
             floating_widget = FloatingWidget(repo=repo, tracker=tracker)
+            floating_widget.widget_hidden.connect(
+                lambda: tray.set_widget_visible(False)
+            )
             floating_widget.show()
-        else:
+            tray.set_widget_visible(True)
+        elif floating_widget.isVisible():
             floating_widget.hide()
+            tray.set_widget_visible(False)
+        else:
+            floating_widget.show()
+            tray.set_widget_visible(True)
 
     tray.open_settings.connect(open_settings)
     tray.open_reports.connect(open_reports)
