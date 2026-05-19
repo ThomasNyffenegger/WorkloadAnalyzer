@@ -75,8 +75,11 @@ Worker-Thread (QThread):
 
 ## Feature 2: Suggestion Popup
 
-### 2a) Gleiche Kategorie unterdrücken
-In `app.py`, im Handler für `category_detected`: vor dem Öffnen des Popups wird geprüft, ob `suggested_category_id == tracker.current_state().category_id`. Falls ja: kein Popup, kein Tracking-Wechsel, Signal wird still verworfen.
+### 2a) Popup unterdrücken
+In `app.py`, im Handler für `category_detected`: vor dem Öffnen des Popups werden zwei Fälle geprüft — beide führen zu stillem Verwerfen ohne Popup:
+
+1. **Kein Mapping vorhanden:** Die erkannte Outlook-Kategorie hat keine zugeordnete App-Kategorie (`suggested_category_id is None`) → kein Popup.
+2. **Gleiche Kategorie:** `suggested_category_id == tracker.current_state().category_id` → kein Popup.
 
 ### 2b) Auto-Close nach 10s → Ja
 `SuggestionPopup` bekommt einen `QTimer` (1s-Intervall, 10 Ticks). Der „Ja"-Button zeigt einen Countdown: `"Ja (10)"` → `"Ja (9)"` → … → `"Ja (1)"`. Nach dem 10. Tick: `self.done(SUGGESTION_YES)`. Der Countdown wird gestoppt sobald der Nutzer eine Taste drückt oder einen Button klickt.
