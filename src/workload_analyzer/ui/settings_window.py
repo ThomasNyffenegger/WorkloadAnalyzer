@@ -66,6 +66,8 @@ class SettingsWindow(QDialog):
         self.cat_table = QTableWidget(0, 5)
         self.cat_table.setHorizontalHeaderLabels(["Name", "Rolle", "Farbe", "Aktiv", "Outlook-Name"])
         self.cat_table.horizontalHeader().setStretchLastSection(True)
+        self.cat_table.setEditTriggers(QTableWidget.EditTrigger.NoEditTriggers)
+        self.cat_table.setSortingEnabled(True)
         cats_box.addWidget(self.cat_table)
 
         ch = QHBoxLayout()
