@@ -10,7 +10,12 @@ from workload_analyzer.db.repository import Repository
 from workload_analyzer.models import EntrySource
 
 
+_icon_cache: dict[str, QIcon] = {}
+
+
 def _make_color_icon(color_hex: str) -> QIcon:
+    if color_hex in _icon_cache:
+        return _icon_cache[color_hex]
     pix = QPixmap(32, 32)
     pix.fill(QColor("transparent"))
     p = QPainter(pix)
@@ -18,7 +23,9 @@ def _make_color_icon(color_hex: str) -> QIcon:
     p.setPen(QColor("#222"))
     p.drawEllipse(4, 4, 24, 24)
     p.end()
-    return QIcon(pix)
+    icon = QIcon(pix)
+    _icon_cache[color_hex] = icon
+    return icon
 
 
 class TrayIcon(QObject):
@@ -49,7 +56,10 @@ class TrayIcon(QObject):
         self.icon.activated.connect(self._on_tray_activated)
         self._widget_visible: bool = True
 
-        # Refresh tooltip and menu state every 5 seconds.
+        # Rebuild switch menu lazily when menu is about to show
+        self.menu.aboutToShow.connect(self._refresh_switch_menu)
+
+        # Refresh tooltip and icon every 5 seconds (no menu rebuild)
         self._timer = QTimer(self)
         self._timer.timeout.connect(self.refresh)
         self._timer.start(5000)
@@ -107,7 +117,6 @@ class TrayIcon(QObject):
             self._switch_menu.addAction(act)
 
     def refresh(self) -> None:
-        self._refresh_switch_menu()
         state = self.tracker.current_state()
 
         # Reminder state tracking

@@ -96,6 +96,10 @@ class FloatingWidget(QWidget):
         self._timer.timeout.connect(self.refresh)
         self._timer.start(1000)
 
+        # State cache to skip expensive DB work when nothing changed
+        self._last_kind: Optional[object] = None
+        self._last_category_id: Optional[int] = None
+
         self._restore_position()
         self.refresh()
 
@@ -145,30 +149,40 @@ class FloatingWidget(QWidget):
         self.refresh()
 
     def refresh(self) -> None:
-        self._populate_combo()
         state = self.tracker.current_state()
+        state_changed = (state.kind != self._last_kind or state.category_id != self._last_category_id)
+
+        if state_changed:
+            # Slow path: state changed — rebuild combo and update labels/colors
+            self._last_kind = state.kind
+            self._last_category_id = state.category_id
+            self._populate_combo()
+
+            if state.kind == TrackerState.Kind.TRACKING and state.category_id is not None:
+                cat = self.repo.get_category(state.category_id)
+                role = self.repo.get_role(cat.role_id) if cat else None
+                cat_color = (cat.color if cat and cat.color else None) or "#444"
+                cat_name = cat.name if cat else "?"
+                role_name = role.name if role else ""
+                self._cat_label.setText(f"{cat_name}  ·  {role_name}")
+                self._color_strip.setStyleSheet(
+                    f"background-color: {cat_color}; border-radius: 4px;"
+                )
+                self.pause_btn.setText("⏸")
+            elif state.kind == TrackerState.Kind.PAUSED:
+                self._cat_label.setText("Paused")
+                self._color_strip.setStyleSheet("background-color: #555; border-radius: 4px;")
+                self.elapsed.setText("--:--:--")
+                self.pause_btn.setText("▶")
+            else:
+                self._cat_label.setText("Not tracking")
+                self._color_strip.setStyleSheet("background-color: #444; border-radius: 4px;")
+                self.elapsed.setText("00:00:00")
+                self.pause_btn.setText("⏸")
+
+        # Fast path (every second): update elapsed timer only
         if state.kind == TrackerState.Kind.TRACKING and state.category_id is not None:
-            cat = self.repo.get_category(state.category_id)
-            role = self.repo.get_role(cat.role_id) if cat else None
-            cat_color = (cat.color if cat and cat.color else None) or "#444"
-            cat_name = cat.name if cat else "?"
-            role_name = role.name if role else ""
-            self._cat_label.setText(f"{cat_name}  ·  {role_name}")
-            self._color_strip.setStyleSheet(
-                f"background-color: {cat_color}; border-radius: 4px;"
-            )
             elapsed = int(time.time()) - (state.started_at or int(time.time()))
             h, rem = divmod(elapsed, 3600)
             m, s = divmod(rem, 60)
             self.elapsed.setText(f"{h:02d}:{m:02d}:{s:02d}")
-            self.pause_btn.setText("⏸")
-        elif state.kind == TrackerState.Kind.PAUSED:
-            self._cat_label.setText("Paused")
-            self._color_strip.setStyleSheet("background-color: #555; border-radius: 4px;")
-            self.elapsed.setText("--:--:--")
-            self.pause_btn.setText("▶")
-        else:
-            self._cat_label.setText("Not tracking")
-            self._color_strip.setStyleSheet("background-color: #444; border-radius: 4px;")
-            self.elapsed.setText("00:00:00")
-            self.pause_btn.setText("⏸")
