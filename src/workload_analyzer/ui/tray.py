@@ -44,7 +44,9 @@ class TrayIcon(QObject):
         self._reminder_active: bool = False
         self._blink_state: bool = False
 
-        self._cached_cat = None  # cached Category object — avoids DB in _on_blink
+        self._cached_cat = None   # cached Category object — avoids DB in _on_blink
+        self._cached_role = None  # cached Role for the same category
+        self._last_refreshed_cat_id: Optional[int] = None  # guards DB refresh in refresh()
 
         self._blink_timer = QTimer(self)
         self._blink_timer.setInterval(2000)
@@ -58,7 +60,7 @@ class TrayIcon(QObject):
         self.icon.activated.connect(self._on_tray_activated)
         self._widget_visible: bool = True
 
-        self._switch_menu_dirty: bool = True  # force rebuild on first open
+        self._switch_menu_dirty: bool = True
         # Rebuild switch menu lazily when menu is about to show
         self.menu.aboutToShow.connect(self._refresh_switch_menu)
 
@@ -119,8 +121,17 @@ class TrayIcon(QObject):
         for cat in self.repo.list_categories(active_only=True):
             act = QAction(cat.name, self._switch_menu)
             act.setIcon(_make_color_icon(cat.color or "#888888"))
-            act.triggered.connect(lambda _checked=False, cid=cat.id: self.tracker.switch_to(cid, EntrySource.MANUAL))
+            act.triggered.connect(lambda _checked=False, cid=cat.id: self._on_switch_category(cid))
             self._switch_menu.addAction(act)
+
+    def _on_switch_category(self, category_id: int) -> None:
+        self.tracker.switch_to(category_id, EntrySource.MANUAL)
+        self.refresh()
+
+    def invalidate_categories(self) -> None:
+        """Force switch-menu rebuild and category/role cache flush on next refresh."""
+        self._switch_menu_dirty = True
+        self._last_refreshed_cat_id = None
 
     def refresh(self) -> None:
         state = self.tracker.current_state()
@@ -138,13 +149,15 @@ class TrayIcon(QObject):
             self._blink_timer.start()
 
         if state.kind == TrackerState.Kind.TRACKING and state.category_id is not None:
-            cat = self.repo.get_category(state.category_id)
-            self._cached_cat = cat  # cache for _on_blink (no DB needed there)
-            if cat:
-                role = self.repo.get_role(cat.role_id)
-                role_name = role.name if role else ""
-                self._header_action.setText(f"{cat.name} ({role_name})")
-                self.icon.setToolTip(f"Tracking: {cat.name}")
+            if state.category_id != self._last_refreshed_cat_id:
+                # Category changed — refresh DB cache for cat and role
+                self._last_refreshed_cat_id = state.category_id
+                self._cached_cat = self.repo.get_category(state.category_id)
+                self._cached_role = self.repo.get_role(self._cached_cat.role_id) if self._cached_cat else None
+                if self._cached_cat:
+                    role_name = self._cached_role.name if self._cached_role else ""
+                    self._header_action.setText(f"{self._cached_cat.name} ({role_name})")
+                    self.icon.setToolTip(f"Tracking: {self._cached_cat.name}")
             self._pause_action.setEnabled(True)
             self._resume_action.setEnabled(False)
         elif state.kind == TrackerState.Kind.PAUSED:
@@ -167,7 +180,7 @@ class TrayIcon(QObject):
         self._blink_state = not self._blink_state
         self._apply_icon(self.tracker.current_state())
 
-    def _apply_icon(self, state) -> None:
+    def _apply_icon(self, state: TrackerState) -> None:
         if not self._outlook_available:
             self.icon.setIcon(_make_color_icon("#ff8800"))
             return

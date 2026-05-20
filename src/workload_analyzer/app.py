@@ -13,6 +13,8 @@ from workload_analyzer.paths import db_path
 from workload_analyzer.services.outlook_monitor import OutlookMonitor
 from workload_analyzer.ui.tray import TrayIcon
 
+_log = logging.getLogger(__name__)
+
 
 def run() -> int:
     app = QApplication(sys.argv)
@@ -26,7 +28,7 @@ def run() -> int:
             from workload_analyzer.services.backup import backup
             backup(db_path(), Path(_backup_path))
         except Exception as exc:
-            logging.getLogger(__name__).warning("Startup backup failed: %s", exc)
+            _log.warning("Startup backup failed: %s", exc)
     tracker = TimeTracker(repo=repo, clock=lambda: int(time.time()))
     tracker.load_state()
 
@@ -63,7 +65,7 @@ def run() -> int:
                 tracker.switch_to(cats[n - 1].id, EntrySource.MANUAL)
                 tray.refresh()
         except Exception as exc:
-            logging.getLogger(__name__).error("Hotkey handler failed: %s", exc)
+            _log.error("Hotkey handler failed: %s", exc)
 
     hotkeys.triggered.connect(_on_hotkey)
 
@@ -114,7 +116,7 @@ def run() -> int:
                 if cat_id is not None:
                     tracker.switch_to(cat_id, EntrySource.AUTO_MEETING)
         except Exception as exc:
-            logging.getLogger(__name__).error("Meeting-started handler failed: %s", exc)
+            _log.error("Meeting-started handler failed: %s", exc)
 
     def _on_meeting_ended() -> None:
         pass  # Lock release — tracker continues on current category
@@ -209,8 +211,10 @@ def run() -> int:
         from workload_analyzer.ui.settings_window import SettingsWindow
         win = SettingsWindow(repo, monitor=monitor, system_monitor=sys_monitor)
         win.exec()
-        tray._switch_menu_dirty = True  # categories may have changed
+        tray.invalidate_categories()
         tray.refresh()
+        if floating_widget is not None:
+            floating_widget.invalidate_categories()
 
     def open_reports():
         from workload_analyzer.ui.reports_window import ReportsWindow

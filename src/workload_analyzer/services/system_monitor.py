@@ -3,8 +3,11 @@ from __future__ import annotations
 
 import ctypes
 import ctypes.wintypes
+import logging
 import time
 from typing import Callable, Optional
+
+_log = logging.getLogger(__name__)
 
 from PyQt6.QtCore import QAbstractNativeEventFilter, QObject, QTimer, pyqtSignal
 from PyQt6.QtWidgets import QApplication
@@ -111,8 +114,8 @@ class SystemMonitor(QObject, QAbstractNativeEventFilter):
             msg = _MSG.from_address(int(message))
             if msg.message == WM_WTSSESSION_CHANGE:
                 self._handle_wts_event(msg.wParam)
-        except Exception:
-            pass
+        except Exception as exc:
+            _log.debug("nativeEventFilter error: %s", exc)
         return False, 0  # never consume the event
 
     # ------------------------------------------------------------------
@@ -133,10 +136,7 @@ class SystemMonitor(QObject, QAbstractNativeEventFilter):
         elif w_param == WTS_SESSION_UNLOCK and self._locked:
             self._locked = False
             if self._lock_ts is None:
-                import logging
-                logging.getLogger(__name__).warning(
-                    "session_unlocked fired but _lock_ts is None — ignoring"
-                )
+                _log.warning("session_unlocked fired but _lock_ts is None — ignoring")
                 return
             lock_ts = self._lock_ts
             self._lock_ts = None

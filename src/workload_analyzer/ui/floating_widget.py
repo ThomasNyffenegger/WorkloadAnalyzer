@@ -98,8 +98,10 @@ class FloatingWidget(QWidget):
         self._timer.start(1000)
 
         # State cache to skip expensive DB work when nothing changed
-        self._last_kind: Optional[object] = None
+        self._last_kind: Optional[TrackerState.Kind] = None
         self._last_category_id: Optional[int] = None
+        self._cats_dirty: bool = True   # True on first load and after settings change
+        self._cached_cats: list = []
 
         self._restore_position()
         self.refresh()
@@ -118,11 +120,18 @@ class FloatingWidget(QWidget):
         self.repo.set_setting("floating_widget_x", str(self.x()))
         self.repo.set_setting("floating_widget_y", str(self.y()))
 
+    def invalidate_categories(self) -> None:
+        """Call after categories are added/removed/renamed in settings."""
+        self._cats_dirty = True
+
     def _populate_combo(self) -> None:
+        if self._cats_dirty:
+            self._cats_dirty = False
+            self._cached_cats = self.repo.list_categories(active_only=True)
         current = self.combo.currentData()
         self.combo.blockSignals(True)
         self.combo.clear()
-        for c in self.repo.list_categories(active_only=True):
+        for c in self._cached_cats:
             self.combo.addItem(c.name, c.id)
         state = self.tracker.current_state()
         if state.category_id is not None:
@@ -183,7 +192,8 @@ class FloatingWidget(QWidget):
 
         # Fast path (every second): update elapsed timer only
         if state.kind == TrackerState.Kind.TRACKING and state.category_id is not None:
-            elapsed = int(time.time()) - (state.started_at or int(time.time()))
+            started = state.started_at if state.started_at is not None and state.started_at > 0 else int(time.time())
+            elapsed = int(time.time()) - started
             h, rem = divmod(elapsed, 3600)
             m, s = divmod(rem, 60)
             self.elapsed.setText(f"{h:02d}:{m:02d}:{s:02d}")
