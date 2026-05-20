@@ -132,7 +132,12 @@ class SystemMonitor(QObject, QAbstractNativeEventFilter):
 
         elif w_param == WTS_SESSION_UNLOCK and self._locked:
             self._locked = False
-            assert self._lock_ts is not None, "_lock_ts must be set when _locked is True"
+            if self._lock_ts is None:
+                import logging
+                logging.getLogger(__name__).warning(
+                    "session_unlocked fired but _lock_ts is None — ignoring"
+                )
+                return
             lock_ts = self._lock_ts
             self._lock_ts = None
             self.session_unlocked.emit(lock_ts, now)

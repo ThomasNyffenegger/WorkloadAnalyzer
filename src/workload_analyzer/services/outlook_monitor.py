@@ -169,7 +169,9 @@ class OutlookMonitor(QObject):
                 Qt.ConnectionType.BlockingQueuedConnection,
             )
             self._thread.quit()
-            self._thread.wait()
+            if not self._thread.wait(3000):  # 3s timeout — don't block forever if COM hangs
+                _log.warning("OutlookMonitor worker thread did not stop within 3s; forcing termination")
+                self._thread.terminate()
 
     def set_interval(self, seconds: int) -> None:
         self._request_interval.emit(seconds * 1000)

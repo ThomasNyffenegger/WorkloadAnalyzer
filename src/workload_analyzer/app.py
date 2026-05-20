@@ -57,10 +57,13 @@ def run() -> int:
         hotkeys.register(i)
 
     def _on_hotkey(n: int) -> None:
-        cats = repo.list_categories(active_only=True)
-        if n <= len(cats):
-            tracker.switch_to(cats[n - 1].id, EntrySource.MANUAL)
-            tray.refresh()
+        try:
+            cats = repo.list_categories(active_only=True)
+            if n <= len(cats):
+                tracker.switch_to(cats[n - 1].id, EntrySource.MANUAL)
+                tray.refresh()
+        except Exception as exc:
+            logging.getLogger(__name__).error("Hotkey handler failed: %s", exc)
 
     hotkeys.triggered.connect(_on_hotkey)
 
@@ -96,19 +99,22 @@ def run() -> int:
             repo.record_rejection(outlook_name, cat.id, immediate_silence=True)
 
     def _on_meeting_started(title: str, outlook_category) -> None:
-        from workload_analyzer.ui.suggestion_popup import MeetingCategoryDialog
-        active_cats = repo.list_categories(active_only=True)
-        if outlook_category:
-            cat = repo.find_category_by_outlook_name(outlook_category)
-            if cat:
-                tracker.switch_to(cat.id, EntrySource.AUTO_MEETING)
-                return
-        # No mapped category — ask user
-        dlg = MeetingCategoryDialog(title, active_cats)
-        if dlg.exec():
-            cat_id = dlg.selected_category_id()
-            if cat_id is not None:
-                tracker.switch_to(cat_id, EntrySource.AUTO_MEETING)
+        try:
+            from workload_analyzer.ui.suggestion_popup import MeetingCategoryDialog
+            active_cats = repo.list_categories(active_only=True)
+            if outlook_category:
+                cat = repo.find_category_by_outlook_name(outlook_category)
+                if cat:
+                    tracker.switch_to(cat.id, EntrySource.AUTO_MEETING)
+                    return
+            # No mapped category — ask user
+            dlg = MeetingCategoryDialog(title, active_cats)
+            if dlg.exec():
+                cat_id = dlg.selected_category_id()
+                if cat_id is not None:
+                    tracker.switch_to(cat_id, EntrySource.AUTO_MEETING)
+        except Exception as exc:
+            logging.getLogger(__name__).error("Meeting-started handler failed: %s", exc)
 
     def _on_meeting_ended() -> None:
         pass  # Lock release — tracker continues on current category
@@ -203,6 +209,7 @@ def run() -> int:
         from workload_analyzer.ui.settings_window import SettingsWindow
         win = SettingsWindow(repo, monitor=monitor, system_monitor=sys_monitor)
         win.exec()
+        tray._switch_menu_dirty = True  # categories may have changed
         tray.refresh()
 
     def open_reports():

@@ -10,6 +10,8 @@ def connect(db_path: Path) -> sqlite3.Connection:
     conn = sqlite3.connect(str(db_path), isolation_level=None)
     conn.row_factory = sqlite3.Row
     conn.execute("PRAGMA foreign_keys = ON")
+    conn.execute("PRAGMA journal_mode = WAL")   # concurrent reads during writes
+    conn.execute("PRAGMA synchronous = NORMAL")  # safe with WAL, faster than FULL
     _init_schema(conn)
     return conn
 

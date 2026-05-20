@@ -31,6 +31,8 @@ CREATE TABLE IF NOT EXISTS time_entries (
 CREATE INDEX IF NOT EXISTS idx_entries_start ON time_entries(start_ts);
 CREATE INDEX IF NOT EXISTS idx_entries_end ON time_entries(end_ts);
 CREATE INDEX IF NOT EXISTS idx_entries_category ON time_entries(category_id);
+-- Fast lookup for the single open entry (end_ts IS NULL) used by get_open_entry and _check_no_overlap
+CREATE INDEX IF NOT EXISTS idx_entries_open ON time_entries(start_ts) WHERE end_ts IS NULL;
 
 CREATE TABLE IF NOT EXISTS outlook_references (
     id INTEGER PRIMARY KEY AUTOINCREMENT,

@@ -44,6 +44,8 @@ class TrayIcon(QObject):
         self._reminder_active: bool = False
         self._blink_state: bool = False
 
+        self._cached_cat = None  # cached Category object — avoids DB in _on_blink
+
         self._blink_timer = QTimer(self)
         self._blink_timer.setInterval(2000)
         self._blink_timer.timeout.connect(self._on_blink)
@@ -56,6 +58,7 @@ class TrayIcon(QObject):
         self.icon.activated.connect(self._on_tray_activated)
         self._widget_visible: bool = True
 
+        self._switch_menu_dirty: bool = True  # force rebuild on first open
         # Rebuild switch menu lazily when menu is about to show
         self.menu.aboutToShow.connect(self._refresh_switch_menu)
 
@@ -109,10 +112,13 @@ class TrayIcon(QObject):
         self.icon.setContextMenu(self.menu)
 
     def _refresh_switch_menu(self) -> None:
+        if not self._switch_menu_dirty:
+            return
+        self._switch_menu_dirty = False
         self._switch_menu.clear()
         for cat in self.repo.list_categories(active_only=True):
             act = QAction(cat.name, self._switch_menu)
-            act.setIcon(_make_color_icon(cat.color))
+            act.setIcon(_make_color_icon(cat.color or "#888888"))
             act.triggered.connect(lambda _checked=False, cid=cat.id: self.tracker.switch_to(cid, EntrySource.MANUAL))
             self._switch_menu.addAction(act)
 
@@ -133,6 +139,7 @@ class TrayIcon(QObject):
 
         if state.kind == TrackerState.Kind.TRACKING and state.category_id is not None:
             cat = self.repo.get_category(state.category_id)
+            self._cached_cat = cat  # cache for _on_blink (no DB needed there)
             if cat:
                 role = self.repo.get_role(cat.role_id)
                 role_name = role.name if role else ""
@@ -165,7 +172,7 @@ class TrayIcon(QObject):
             self.icon.setIcon(_make_color_icon("#ff8800"))
             return
         if state.kind == TrackerState.Kind.TRACKING and state.category_id is not None:
-            cat = self.repo.get_category(state.category_id)
+            cat = self._cached_cat  # use cached value — no DB call needed
             if cat:
                 color = "#888888" if (self._reminder_active and self._blink_state) else cat.color
                 self.icon.setIcon(_make_color_icon(color))

@@ -31,8 +31,9 @@ class _DragHandle(QLabel):
             self._fw.move(event.globalPosition().toPoint() - self._drag_pos)
 
     def mouseReleaseEvent(self, event: QMouseEvent) -> None:
+        if self._drag_pos is not None:  # only save if we actually dragged
+            self._fw._save_position()
         self._drag_pos = None
-        self._fw._save_position()
 
 
 class FloatingWidget(QWidget):
