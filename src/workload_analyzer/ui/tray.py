@@ -47,6 +47,8 @@ class TrayIcon(QObject):
         self._cached_cat = None   # cached Category object — avoids DB in _on_blink
         self._cached_role = None  # cached Role for the same category
         self._last_refreshed_cat_id: Optional[int] = None  # guards DB refresh in refresh()
+        self._switch_menu_dirty: bool = True  # must be set before _build_menu()
+        self._widget_visible: bool = True     # must be set before _build_menu()
 
         self._blink_timer = QTimer(self)
         self._blink_timer.setInterval(2000)
@@ -58,9 +60,7 @@ class TrayIcon(QObject):
         self._build_menu()
         self.icon.show()
         self.icon.activated.connect(self._on_tray_activated)
-        self._widget_visible: bool = True
 
-        self._switch_menu_dirty: bool = True
         # Rebuild switch menu lazily when menu is about to show
         self.menu.aboutToShow.connect(self._refresh_switch_menu)
 
