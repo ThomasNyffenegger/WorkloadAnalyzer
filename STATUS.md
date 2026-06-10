@@ -17,6 +17,11 @@
 
 **Tests:** 132 passing. Stack: Python 3.11+, PyQt6, SQLite, openpyxl, pytest.
 
+**Post-Phase-6 Verbesserungen (keine neue Phase):**
+- Performance & Stabilität: SQLite WAL-Mode, Partial-Index `WHERE end_ts IS NULL`, TrayIcon-Kategorie-Cache (kein DB-Call alle 5s), FloatingWidget State-Cache (kein DB im 1s-Tick), Switch-Menu Lazy-Rebuild (`aboutToShow`), Thread-Stop-Timeout mit `terminate()`-Fallback, `assert`→Guard in SystemMonitor, try/except in Event-Handlern
+- Simplify-Review: `invalidate_categories()` API statt `_switch_menu_dirty`-Direktzugriff, `_cached_role` neben `_cached_cat`, `_cats_dirty`/`_cached_cats` in FloatingWidget, Modul-Level-Logger in `app.py` + `system_monitor.py`, `nativeEventFilter` loggt statt stumm schluckt, Typannotationen vervollständigt
+- Bugfix: `_switch_menu_dirty` + `_widget_visible` vor `_build_menu()` initialisieren (AttributeError beim Start)
+
 ---
 
 ## Spec-Schulden (aus Phase-1-Spec)

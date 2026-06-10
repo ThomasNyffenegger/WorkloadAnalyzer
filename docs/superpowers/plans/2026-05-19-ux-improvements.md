@@ -1,6 +1,6 @@
 # UX-Verbesserungen & Bugfixes (Phase 6) Implementation Plan
 
-> **For agentic workers:** REQUIRED SUB-SKILL: Use superpowers:subagent-driven-development (recommended) or superpowers:executing-plans to implement this plan task-by-task. Steps use checkbox (`- [ ]`) syntax for tracking.
+> **For agentic workers:** REQUIRED SUB-SKILL: Use superpowers:subagent-driven-development (recommended) or superpowers:executing-plans to implement this plan task-by-task. Steps use checkbox (`- [x]`) syntax for tracking.
 
 **Goal:** Fix real-usage pain points: Outlook UI blocking, suggestion popup improvements, import/editor UX, floating widget overhaul.
 
@@ -41,7 +41,7 @@ Fix: extract all COM logic into `_OutlookWorker(QObject)`, move it to a `QThread
 
 The existing tests call `monitor._poll()` directly — they'll be updated to call `monitor._worker._poll()` instead.
 
-- [ ] **Step 1: Update existing tests to use `_worker._poll()`**
+- [x] **Step 1: Update existing tests to use `_worker._poll()`**
 
 In `tests/test_outlook_monitor.py`, replace every occurrence of `monitor._poll()` with `monitor._worker._poll()`. The `_make_monitor` helper stays the same.
 
@@ -299,7 +299,7 @@ def test_meeting_ended_emitted_on_availability_loss(qtbot):
     assert ended == [True]
 ```
 
-- [ ] **Step 2: Run tests to verify they fail**
+- [x] **Step 2: Run tests to verify they fail**
 
 ```
 python -m pytest tests/test_outlook_monitor.py -v
@@ -307,7 +307,7 @@ python -m pytest tests/test_outlook_monitor.py -v
 
 Expected: FAIL — `AttributeError: 'OutlookMonitor' object has no attribute '_worker'`
 
-- [ ] **Step 3: Rewrite `outlook_monitor.py`**
+- [x] **Step 3: Rewrite `outlook_monitor.py`**
 
 Replace the entire file with:
 
@@ -488,7 +488,7 @@ class OutlookMonitor(QObject):
         return win32com.client.GetActiveObject("Outlook.Application")
 ```
 
-- [ ] **Step 4: Run the updated tests**
+- [x] **Step 4: Run the updated tests**
 
 ```
 python -m pytest tests/test_outlook_monitor.py -v
@@ -496,7 +496,7 @@ python -m pytest tests/test_outlook_monitor.py -v
 
 Expected: 14 passed
 
-- [ ] **Step 5: Write threading smoke tests**
+- [x] **Step 5: Write threading smoke tests**
 
 Create `tests/test_outlook_monitor_threading.py`:
 
@@ -539,7 +539,7 @@ def test_set_interval_does_not_crash_when_running(qtbot):
     monitor.stop()
 ```
 
-- [ ] **Step 6: Run all tests**
+- [x] **Step 6: Run all tests**
 
 ```
 python -m pytest --tb=short -q
@@ -547,7 +547,7 @@ python -m pytest --tb=short -q
 
 Expected: 127 passed (123 existing + 4 new)
 
-- [ ] **Step 7: Commit**
+- [x] **Step 7: Commit**
 
 ```bash
 git add src/workload_analyzer/services/outlook_monitor.py tests/test_outlook_monitor.py tests/test_outlook_monitor_threading.py
@@ -568,7 +568,7 @@ Two fixes:
 1. `SuggestionPopup` auto-closes after 10s accepting the suggestion. The "Ja" button shows a countdown.
 2. In `app.py`, `_on_category_detected` must suppress the popup if the detected category has no app mapping OR maps to the currently tracked category.
 
-- [ ] **Step 1: Write failing tests for auto-close**
+- [x] **Step 1: Write failing tests for auto-close**
 
 Create `tests/test_suggestion_popup.py`:
 
@@ -623,7 +623,7 @@ def test_timer_stops_on_manual_close(qtbot):
     assert not popup._auto_timer.isActive()
 ```
 
-- [ ] **Step 2: Run tests to verify they fail**
+- [x] **Step 2: Run tests to verify they fail**
 
 ```
 python -m pytest tests/test_suggestion_popup.py -v
@@ -631,7 +631,7 @@ python -m pytest tests/test_suggestion_popup.py -v
 
 Expected: FAIL — `AttributeError: 'SuggestionPopup' object has no attribute '_yes_btn'`
 
-- [ ] **Step 3: Rewrite `suggestion_popup.py` with countdown**
+- [x] **Step 3: Rewrite `suggestion_popup.py` with countdown**
 
 Replace the `SuggestionPopup` class (keep `MeetingCategoryDialog` unchanged):
 
@@ -750,7 +750,7 @@ class MeetingCategoryDialog(QDialog):
         return self._combo.currentData()
 ```
 
-- [ ] **Step 4: Run suggestion popup tests**
+- [x] **Step 4: Run suggestion popup tests**
 
 ```
 python -m pytest tests/test_suggestion_popup.py -v
@@ -758,7 +758,7 @@ python -m pytest tests/test_suggestion_popup.py -v
 
 Expected: 4 passed
 
-- [ ] **Step 5: Update `app.py` — suppress popup for same/unmapped category**
+- [x] **Step 5: Update `app.py` — suppress popup for same/unmapped category**
 
 In `app.py`, find `_on_category_detected` (around line 74). Add two suppression checks after the `cat is None` check:
 
@@ -790,7 +790,7 @@ With:
             return
 ```
 
-- [ ] **Step 6: Run full test suite**
+- [x] **Step 6: Run full test suite**
 
 ```
 python -m pytest --tb=short -q
@@ -798,7 +798,7 @@ python -m pytest --tb=short -q
 
 Expected: 131 passed
 
-- [ ] **Step 7: Commit**
+- [x] **Step 7: Commit**
 
 ```bash
 git add src/workload_analyzer/ui/suggestion_popup.py src/workload_analyzer/app.py tests/test_suggestion_popup.py
@@ -821,7 +821,7 @@ Current state of `ImportOutlookDialog._build_ui()`:
 
 Add: `setSortingEnabled(True)` on column 0, "Alle auswählen" toggle button, disable OK + show warning when no roles.
 
-- [ ] **Step 1: Rewrite `_build_ui` in `ImportOutlookDialog`**
+- [x] **Step 1: Rewrite `_build_ui` in `ImportOutlookDialog`**
 
 Replace the `_build_ui` method:
 
@@ -859,7 +859,7 @@ Replace the `_build_ui` method:
         layout.addWidget(self._btns)
 ```
 
-- [ ] **Step 2: Add `_toggle_all` method**
+- [x] **Step 2: Add `_toggle_all` method**
 
 Add after `_build_ui`:
 
@@ -877,7 +877,7 @@ Add after `_build_ui`:
         )
 ```
 
-- [ ] **Step 3: Verify it compiles**
+- [x] **Step 3: Verify it compiles**
 
 ```
 python -m py_compile src/workload_analyzer/ui/import_outlook_dialog.py
@@ -885,7 +885,7 @@ python -m py_compile src/workload_analyzer/ui/import_outlook_dialog.py
 
 Expected: no output
 
-- [ ] **Step 4: Run full test suite**
+- [x] **Step 4: Run full test suite**
 
 ```
 python -m pytest --tb=short -q
@@ -893,7 +893,7 @@ python -m pytest --tb=short -q
 
 Expected: 131 passed (no change — UI changes not unit-tested)
 
-- [ ] **Step 5: Commit**
+- [x] **Step 5: Commit**
 
 ```bash
 git add src/workload_analyzer/ui/import_outlook_dialog.py
@@ -913,7 +913,7 @@ git commit -m "feat: import dialog — sortable, select-all, disable when no rol
 
 Two lines to add in `_build_categories_tab` after creating `self.cat_table`.
 
-- [ ] **Step 1: Make cat_table read-only and sortable**
+- [x] **Step 1: Make cat_table read-only and sortable**
 
 In `_build_categories_tab`, after these lines:
 ```python
@@ -928,7 +928,7 @@ Add:
         self.cat_table.setSortingEnabled(True)
 ```
 
-- [ ] **Step 2: Verify it compiles**
+- [x] **Step 2: Verify it compiles**
 
 ```
 python -m py_compile src/workload_analyzer/ui/settings_window.py
@@ -936,7 +936,7 @@ python -m py_compile src/workload_analyzer/ui/settings_window.py
 
 Expected: no output
 
-- [ ] **Step 3: Run full test suite**
+- [x] **Step 3: Run full test suite**
 
 ```
 python -m pytest --tb=short -q
@@ -944,7 +944,7 @@ python -m pytest --tb=short -q
 
 Expected: 131 passed
 
-- [ ] **Step 4: Commit**
+- [x] **Step 4: Commit**
 
 ```bash
 git add src/workload_analyzer/ui/settings_window.py
@@ -977,7 +977,7 @@ git commit -m "feat: category table read-only and sortable in settings"
 **app.py changes:**
 - `toggle_widget()` connects `widget_hidden` signal and calls `tray.set_widget_visible()`
 
-- [ ] **Step 1: Rewrite `floating_widget.py`**
+- [x] **Step 1: Rewrite `floating_widget.py`**
 
 Replace the entire file:
 
@@ -1157,7 +1157,7 @@ class FloatingWidget(QWidget):
             self.pause_btn.setText("⏸")
 ```
 
-- [ ] **Step 2: Update `tray.py`**
+- [x] **Step 2: Update `tray.py`**
 
 In `TrayIcon.__init__`, after `self.icon.show()`, add:
 
@@ -1195,7 +1195,7 @@ Add these two methods to `TrayIcon`:
             self.toggle_widget.emit()
 ```
 
-- [ ] **Step 3: Update `app.py` — wire widget_hidden + tray visibility**
+- [x] **Step 3: Update `app.py` — wire widget_hidden + tray visibility**
 
 Replace the `toggle_widget` function in `app.py`:
 
@@ -1218,7 +1218,7 @@ Replace the `toggle_widget` function in `app.py`:
             tray.set_widget_visible(True)
 ```
 
-- [ ] **Step 4: Verify all three files compile**
+- [x] **Step 4: Verify all three files compile**
 
 ```
 python -m py_compile src/workload_analyzer/ui/floating_widget.py src/workload_analyzer/ui/tray.py src/workload_analyzer/app.py
@@ -1226,7 +1226,7 @@ python -m py_compile src/workload_analyzer/ui/floating_widget.py src/workload_an
 
 Expected: no output
 
-- [ ] **Step 5: Run full test suite**
+- [x] **Step 5: Run full test suite**
 
 ```
 python -m pytest --tb=short -q
@@ -1234,7 +1234,7 @@ python -m pytest --tb=short -q
 
 Expected: 131 passed
 
-- [ ] **Step 6: Commit**
+- [x] **Step 6: Commit**
 
 ```bash
 git add src/workload_analyzer/ui/floating_widget.py src/workload_analyzer/ui/tray.py src/workload_analyzer/app.py
