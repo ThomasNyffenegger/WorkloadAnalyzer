@@ -21,7 +21,7 @@ def _make_color_icon(color_hex: str) -> QIcon:
     p = QPainter(pix)
     p.setBrush(QColor(color_hex))
     p.setPen(QColor("#222"))
-    p.drawEllipse(4, 4, 24, 24)
+    p.drawRect(2, 2, 27, 27)  # square, filling most of the icon — color reads better at tray size than a small circle
     p.end()
     icon = QIcon(pix)
     _icon_cache[color_hex] = icon
@@ -214,4 +214,4 @@ class TrayIcon(QObject):
 
     def _on_tray_activated(self, reason: QSystemTrayIcon.ActivationReason) -> None:
         if reason == QSystemTrayIcon.ActivationReason.DoubleClick:
-            self.toggle_widget.emit()
+            self.open_reports.emit()

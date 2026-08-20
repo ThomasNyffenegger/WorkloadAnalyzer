@@ -9,7 +9,7 @@ def test_enable_writes_registry_entry():
         enable("C:\\WorkloadAnalyzer.exe")
     args = mock_set.call_args[0]
     assert args[1] == "WorkloadAnalyzer"
-    assert args[4] == "C:\\WorkloadAnalyzer.exe"
+    assert args[4] == '"C:\\WorkloadAnalyzer.exe"'  # quoted like every other Run entry
 
 
 def test_disable_removes_registry_entry():
