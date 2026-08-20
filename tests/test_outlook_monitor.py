@@ -21,9 +21,36 @@ class FakeInspector:
         self.CurrentItem = item
 
 
+class FakeItems:
+    """Simulates Outlook's Items collection.
+
+    Iterating the full collection is the expensive COM/MAPI scan we must avoid
+    on every poll. ``__iter__`` therefore raises — the worker is required to
+    narrow the set via ``Restrict()`` first (which Outlook evaluates itself).
+    """
+
+    def __init__(self, appointments):
+        self._appointments = list(appointments)
+        self.IncludeRecurrences = False
+        self.sorted_by = None
+
+    def Sort(self, field, descending=False):
+        self.sorted_by = field
+
+    def Restrict(self, query):
+        now = datetime.datetime.now()
+        return [a for a in self._appointments if a.Start <= now <= a.End]
+
+    def __iter__(self):
+        raise AssertionError(
+            "Full calendar iteration is forbidden — use Restrict() "
+            "(guards against the per-poll full-calendar scan)"
+        )
+
+
 class FakeFolder:
-    def __init__(self, items=None):
-        self.Items = items or []
+    def __init__(self, items):
+        self.Items = items
 
 
 class FakeNamespace:
@@ -31,7 +58,7 @@ class FakeNamespace:
         self._appointments = appointments or []
 
     def GetDefaultFolder(self, folder_id):
-        return FakeFolder(self._appointments)
+        return FakeFolder(FakeItems(self._appointments))
 
 
 class FakeOutlookApp:
@@ -62,6 +89,8 @@ def test_category_detected_emitted(qtbot):
     detected = []
     monitor.category_detected.connect(detected.append)
     monitor._worker._poll()
+    assert detected == []  # first sighting — awaiting confirmation
+    monitor._worker._poll()
 
     assert detected == ["Coding"]
 
@@ -73,6 +102,7 @@ def test_category_detected_strips_first_only(qtbot):
     detected = []
     monitor.category_detected.connect(detected.append)
     monitor._worker._poll()
+    monitor._worker._poll()
 
     assert detected == ["Coding"]
 
@@ -81,12 +111,35 @@ def test_no_signal_when_category_unchanged(qtbot):
     app_obj = FakeOutlookApp(inspector=FakeInspector(FakeItem(categories="Coding")))
     monitor = _make_monitor(app_obj)
     monitor._worker._poll()
+    monitor._worker._poll()  # confirm "Coding" as the established baseline
 
     detected = []
     monitor.category_detected.connect(detected.append)
     monitor._worker._poll()
 
     assert detected == []
+
+
+def test_transient_category_blip_is_debounced(qtbot):
+    """A single-poll category blip (e.g. a reminder popup briefly opening an
+    old item) must not trigger a switch — a category only counts as a real
+    context change once it's seen on two consecutive polls."""
+    app_obj = FakeOutlookApp(inspector=FakeInspector(FakeItem(categories="Coding")))
+    monitor = _make_monitor(app_obj)
+    detected = []
+    monitor.category_detected.connect(detected.append)
+
+    monitor._worker._poll()
+    monitor._worker._poll()
+    assert detected == ["Coding"]
+
+    # Blip: a different category appears for exactly one poll, then reverts.
+    app_obj._inspector = FakeInspector(FakeItem(categories="Meetings"))
+    monitor._worker._poll()
+    app_obj._inspector = FakeInspector(FakeItem(categories="Coding"))
+    monitor._worker._poll()
+
+    assert detected == ["Coding"]  # no spurious "Meetings" emission
 
 
 def test_no_signal_when_no_inspector(qtbot):
@@ -222,6 +275,26 @@ def test_meeting_no_category(qtbot):
     monitor._worker._poll()
 
     assert started == [("1:1", None)]
+
+
+def test_meeting_lookup_avoids_full_calendar_scan(qtbot):
+    """Regression guard: meeting detection must not enumerate the whole
+    calendar (FakeItems.__iter__ raises); it must narrow via Restrict()."""
+    now = datetime.datetime.now()
+    appt = FakeItem(
+        subject="Team Sync",
+        categories="Meetings",
+        start=now - datetime.timedelta(minutes=5),
+        end=now + datetime.timedelta(minutes=25),
+    )
+    app_obj = FakeOutlookApp(appointments=[appt])
+    monitor = _make_monitor(app_obj)
+
+    started = []
+    monitor.meeting_started.connect(lambda t, c: started.append((t, c)))
+    monitor._worker._poll()  # must not trigger a full-calendar scan
+
+    assert started == [("Team Sync", "Meetings")]
 
 
 def test_meeting_ended_emitted_on_availability_loss(qtbot):

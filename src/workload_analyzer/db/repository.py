@@ -314,12 +314,41 @@ class Repository:
         ).fetchone()
         return False if row is None else bool(row["silenced"])
 
+    def mark_auto_accept(self, outlook_name: str, app_category_id: int) -> None:
+        """Remember that this pairing should switch automatically from now
+        on, without ever showing the SuggestionPopup again."""
+        self.conn.execute(
+            """
+            INSERT INTO rejected_suggestions
+                (outlook_category_name, app_category_id, rejection_count, silenced, auto_accept, last_rejected_at)
+            VALUES (?, ?, 0, 0, 1, datetime('now'))
+            ON CONFLICT(outlook_category_name, app_category_id) DO UPDATE SET
+                auto_accept = 1,
+                silenced = 0
+            """,
+            (outlook_name, app_category_id),
+        )
+
+    def is_auto_accept(self, outlook_name: str, app_category_id: int) -> bool:
+        row = self.conn.execute(
+            "SELECT auto_accept FROM rejected_suggestions "
+            "WHERE outlook_category_name = ? AND app_category_id = ?",
+            (outlook_name, app_category_id),
+        ).fetchone()
+        return False if row is None else bool(row["auto_accept"])
+
+    def set_auto_accept(self, suggestion_id: int, auto_accept: bool) -> None:
+        self.conn.execute(
+            "UPDATE rejected_suggestions SET auto_accept = ? WHERE id = ?",
+            (1 if auto_accept else 0, suggestion_id),
+        )
+
     def list_rejected_suggestions(self) -> list["RejectedSuggestion"]:
         from workload_analyzer.models import RejectedSuggestion
         rows = self.conn.execute(
             """
             SELECT id, outlook_category_name, app_category_id,
-                   rejection_count, silenced, last_rejected_at
+                   rejection_count, silenced, auto_accept, last_rejected_at
             FROM rejected_suggestions
             ORDER BY last_rejected_at DESC
             """
@@ -331,6 +360,7 @@ class Repository:
                 app_category_id=r["app_category_id"],
                 rejection_count=r["rejection_count"],
                 silenced=bool(r["silenced"]),
+                auto_accept=bool(r["auto_accept"]),
                 last_rejected_at=r["last_rejected_at"],
             )
             for r in rows

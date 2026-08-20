@@ -3,6 +3,7 @@ import sys
 import time
 from pathlib import Path
 
+from PyQt6.QtCore import QTimer
 from PyQt6.QtWidgets import QApplication, QInputDialog
 
 from workload_analyzer.core.tracker import TimeTracker, TrackerState
@@ -31,6 +32,17 @@ def run() -> int:
             _log.warning("Startup backup failed: %s", exc)
     tracker = TimeTracker(repo=repo, clock=lambda: int(time.time()))
     tracker.load_state()
+
+    # Heartbeat: periodically record that the app is alive, so a future
+    # restart's load_state() can tell a real offline gap (PC/app was not
+    # running) apart from a still-running open entry.
+    def _write_heartbeat() -> None:
+        repo.set_setting("last_heartbeat_ts", str(int(time.time())))
+
+    _write_heartbeat()
+    heartbeat_timer = QTimer()
+    heartbeat_timer.timeout.connect(_write_heartbeat)
+    heartbeat_timer.start(60_000)
 
     # First-run: if there are no categories, force settings.
     if not repo.list_categories(active_only=True):
@@ -78,7 +90,7 @@ def run() -> int:
 
     def _on_category_detected(outlook_name: str) -> None:
         from workload_analyzer.ui.suggestion_popup import (
-            SuggestionPopup, SUGGESTION_YES, SUGGESTION_NO, SUGGESTION_NEVER,
+            SuggestionPopup, SUGGESTION_YES, SUGGESTION_NO, SUGGESTION_ALWAYS,
         )
         cat = repo.find_category_by_outlook_name(outlook_name)
         if cat is None:
@@ -86,6 +98,9 @@ def run() -> int:
         if cat.id == tracker.current_state().category_id:
             return  # Already on this category — suppress
         if repo.is_silenced(outlook_name, cat.id):
+            return
+        if repo.is_auto_accept(outlook_name, cat.id):
+            tracker.switch_to(cat.id, EntrySource.AUTO_OUTLOOK)
             return
         # Close any previously open popup (treated as rejection)
         if _active_popup[0] is not None and _active_popup[0].isVisible():
@@ -97,8 +112,9 @@ def run() -> int:
             tracker.switch_to(cat.id, EntrySource.AUTO_OUTLOOK)
         elif result == SUGGESTION_NO:
             repo.record_rejection(outlook_name, cat.id)
-        elif result == SUGGESTION_NEVER:
-            repo.record_rejection(outlook_name, cat.id, immediate_silence=True)
+        elif result == SUGGESTION_ALWAYS:
+            repo.mark_auto_accept(outlook_name, cat.id)
+            tracker.switch_to(cat.id, EntrySource.AUTO_OUTLOOK)
 
     def _on_meeting_started(title: str, outlook_category) -> None:
         try:

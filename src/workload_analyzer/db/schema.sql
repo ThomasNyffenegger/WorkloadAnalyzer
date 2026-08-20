@@ -42,12 +42,16 @@ CREATE TABLE IF NOT EXISTS outlook_references (
     item_type TEXT NOT NULL  -- mail, task, appointment
 );
 
+-- Per (outlook_category_name, app_category_id) pairing preference, set via
+-- the SuggestionPopup: silenced = stop suggesting/switching entirely;
+-- auto_accept = switch automatically without asking. Mutually exclusive.
 CREATE TABLE IF NOT EXISTS rejected_suggestions (
     id INTEGER PRIMARY KEY AUTOINCREMENT,
     outlook_category_name TEXT NOT NULL,
     app_category_id INTEGER NOT NULL REFERENCES categories(id) ON DELETE CASCADE,
     rejection_count INTEGER NOT NULL DEFAULT 0,
     silenced INTEGER NOT NULL DEFAULT 0,
+    auto_accept INTEGER NOT NULL DEFAULT 0,
     last_rejected_at TEXT NOT NULL DEFAULT (datetime('now')),
     UNIQUE(outlook_category_name, app_category_id)
 );

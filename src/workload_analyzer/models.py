@@ -53,4 +53,5 @@ class RejectedSuggestion:
     app_category_id: int
     rejection_count: int
     silenced: bool
+    auto_accept: bool
     last_rejected_at: str

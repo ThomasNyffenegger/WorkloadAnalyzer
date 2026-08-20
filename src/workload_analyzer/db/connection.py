@@ -19,3 +19,17 @@ def connect(db_path: Path) -> sqlite3.Connection:
 def _init_schema(conn: sqlite3.Connection) -> None:
     schema_sql = files("workload_analyzer.db").joinpath("schema.sql").read_text(encoding="utf-8")
     conn.executescript(schema_sql)
+    _migrate(conn)
+
+
+def _migrate(conn: sqlite3.Connection) -> None:
+    """Add columns introduced after a table already existed in the wild.
+
+    schema.sql's CREATE TABLE IF NOT EXISTS is a no-op on existing databases,
+    so new columns need an explicit, idempotent ALTER TABLE here.
+    """
+    columns = {row["name"] for row in conn.execute("PRAGMA table_info(rejected_suggestions)")}
+    if "auto_accept" not in columns:
+        conn.execute(
+            "ALTER TABLE rejected_suggestions ADD COLUMN auto_accept INTEGER NOT NULL DEFAULT 0"
+        )

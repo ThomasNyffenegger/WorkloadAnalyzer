@@ -279,11 +279,11 @@ class SettingsWindow(QDialog):
         form.addRow("Poll-Intervall:", self._poll_spin)
         layout.addLayout(form)
 
-        layout.addWidget(QLabel("Stummgeschaltete Erkennungen:"))
+        layout.addWidget(QLabel("Outlook-Erkennungen:"))
 
-        self._rejected_table = QTableWidget(0, 4)
+        self._rejected_table = QTableWidget(0, 5)
         self._rejected_table.setHorizontalHeaderLabels(
-            ["Outlook-Name", "App-Kategorie", "Ablehnungen", "Aktion"]
+            ["Outlook-Name", "App-Kategorie", "Status", "Ablehnungen", "Aktion"]
         )
         self._rejected_table.horizontalHeader().setStretchLastSection(True)
         self._rejected_table.setEditTriggers(QTableWidget.EditTrigger.NoEditTriggers)
@@ -308,15 +308,28 @@ class SettingsWindow(QDialog):
             self._suggestion_ids.append(s.id)
             self._rejected_table.setItem(row, 0, QTableWidgetItem(s.outlook_category_name))
             self._rejected_table.setItem(row, 1, QTableWidgetItem(cats.get(s.app_category_id, "?")))
-            self._rejected_table.setItem(row, 2, QTableWidgetItem(str(s.rejection_count)))
-            action_btn = QPushButton("Reaktivieren" if s.silenced else "Stumm schalten")
-            action_btn.clicked.connect(
-                lambda _checked=False, sid=s.id, silenced=s.silenced: self._toggle_silenced(sid, silenced)
-            )
-            self._rejected_table.setCellWidget(row, 3, action_btn)
+            status = "Automatisch" if s.auto_accept else ("Stumm" if s.silenced else "Aktiv")
+            self._rejected_table.setItem(row, 2, QTableWidgetItem(status))
+            self._rejected_table.setItem(row, 3, QTableWidgetItem(str(s.rejection_count)))
+
+            if s.auto_accept:
+                action_btn = QPushButton("Automatik beenden")
+                action_btn.clicked.connect(
+                    lambda _checked=False, sid=s.id: self._clear_auto_accept(sid)
+                )
+            else:
+                action_btn = QPushButton("Reaktivieren" if s.silenced else "Stumm schalten")
+                action_btn.clicked.connect(
+                    lambda _checked=False, sid=s.id, silenced=s.silenced: self._toggle_silenced(sid, silenced)
+                )
+            self._rejected_table.setCellWidget(row, 4, action_btn)
 
     def _toggle_silenced(self, suggestion_id: int, currently_silenced: bool) -> None:
         self.repo.set_silenced(suggestion_id, not currently_silenced)
+        self._refresh_rejected()
+
+    def _clear_auto_accept(self, suggestion_id: int) -> None:
+        self.repo.set_auto_accept(suggestion_id, False)
         self._refresh_rejected()
 
     def _import_from_outlook(self) -> None:

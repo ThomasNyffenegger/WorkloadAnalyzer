@@ -19,6 +19,12 @@ class TrackerState:
 
 
 class TimeTracker:
+    # If the app's last heartbeat is older than this when load_state() runs,
+    # the app (or the PC) was not actually running in between — an open
+    # entry from before the gap must not be resumed, or the offline time
+    # would silently be counted as tracked work.
+    _STALE_AFTER_SECONDS = 5 * 60
+
     def __init__(self, repo: Repository, clock: Callable[[], int]):
         self.repo = repo
         self.clock = clock
@@ -31,15 +37,34 @@ class TimeTracker:
         return self._state
 
     def load_state(self) -> None:
-        """Rehydrate tracker from DB (e.g., after app restart)."""
+        """Rehydrate tracker from DB (e.g., after app restart).
+
+        An open entry is only resumed if the app's last heartbeat is recent.
+        Otherwise the app (or the PC) was not running for the gap, and the
+        stale entry is closed at that last heartbeat instead of being
+        extended to now — the tracker stays IDLE so the caller can ask the
+        user which category to (re)start.
+        """
         open_entry = self.repo.get_open_entry()
-        if open_entry is not None:
-            self._state = TrackerState(
-                kind=TrackerState.Kind.TRACKING,
-                category_id=open_entry.category_id,
-                started_at=open_entry.start_ts,
-            )
-            self._last_category_id = open_entry.category_id
+        if open_entry is None:
+            return
+
+        last_heartbeat = self.repo.get_setting("last_heartbeat_ts")
+        if last_heartbeat is not None:
+            last_heartbeat_ts = int(last_heartbeat)
+            if (
+                last_heartbeat_ts > open_entry.start_ts
+                and self.clock() - last_heartbeat_ts > self._STALE_AFTER_SECONDS
+            ):
+                self.repo.close_entry(open_entry.id, end_ts=last_heartbeat_ts)
+                return
+
+        self._state = TrackerState(
+            kind=TrackerState.Kind.TRACKING,
+            category_id=open_entry.category_id,
+            started_at=open_entry.start_ts,
+        )
+        self._last_category_id = open_entry.category_id
 
     def start(self, category_id: int, source: EntrySource) -> None:
         if self._state.kind == TrackerState.Kind.TRACKING:

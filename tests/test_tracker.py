@@ -106,3 +106,39 @@ def test_load_state_from_db_picks_up_open_entry(setup, tmp_db_path):
     tracker2.load_state()
     assert tracker2.current_state().kind == TrackerState.Kind.TRACKING
     assert tracker2.current_state().category_id == c1
+
+
+def test_load_state_resumes_when_heartbeat_recent(setup):
+    """Quick crash+relaunch: last heartbeat is only seconds old — resume normally."""
+    tracker, repo, clock, c1, _ = setup
+    tracker.start(category_id=c1, source=EntrySource.MANUAL)
+    clock.advance(30)
+    repo.set_setting("last_heartbeat_ts", str(clock.now))
+    clock.advance(5)
+
+    tracker2 = TimeTracker(repo=repo, clock=clock)
+    tracker2.load_state()
+    assert tracker2.current_state().kind == TrackerState.Kind.TRACKING
+    assert tracker2.current_state().category_id == c1
+
+
+def test_load_state_closes_stale_entry_when_app_was_not_running(setup):
+    """App/PC was off for days: the offline gap must not be counted as tracked time."""
+    tracker, repo, clock, c1, _ = setup
+    tracker.start(category_id=c1, source=EntrySource.MANUAL)
+    heartbeat_ts = clock.now + 30
+    repo.set_setting("last_heartbeat_ts", str(heartbeat_ts))
+
+    clock.advance(10 * 24 * 60 * 60)  # 10 days later — app was never running
+
+    tracker2 = TimeTracker(repo=repo, clock=clock)
+    tracker2.load_state()
+
+    assert tracker2.current_state().kind == TrackerState.Kind.IDLE
+    assert repo.get_open_entry() is None
+
+    entries = repo.list_entries_between(0, 99_999_999_999)
+    closed = [e for e in entries if not e.is_active()]
+    assert len(closed) == 1
+    assert closed[0].end_ts == heartbeat_ts
+    assert closed[0].duration_seconds() == 30

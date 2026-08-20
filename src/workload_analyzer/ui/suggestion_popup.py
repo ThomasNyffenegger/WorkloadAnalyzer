@@ -5,7 +5,7 @@ from typing import Optional
 
 from PyQt6.QtCore import Qt, QTimer
 from PyQt6.QtWidgets import (
-    QComboBox, QDialog, QHBoxLayout, QLabel, QPushButton, QVBoxLayout,
+    QComboBox, QDialog, QHBoxLayout, QLabel, QProgressBar, QPushButton, QVBoxLayout,
 )
 
 from workload_analyzer.models import Category
@@ -13,17 +13,29 @@ from workload_analyzer.models import Category
 # Return codes from SuggestionPopup.exec()
 SUGGESTION_YES = 1
 SUGGESTION_NO = 2
-SUGGESTION_NEVER = 3
+SUGGESTION_ALWAYS = 3
 
 
-_COUNTDOWN_SECONDS = 10
+_COUNTDOWN_SECONDS = 5
+_TICK_MS = 100
+_SCREEN_MARGIN = 16
 
 
 class SuggestionPopup(QDialog):
-    """Popup asking whether to accept an Outlook category suggestion.
+    """Toast-style popup for an auto-detected Outlook category switch.
 
-    Auto-closes after 10 seconds accepting the suggestion (SUGGESTION_YES).
-    The "Ja" button shows a live countdown.
+    Anchored to the bottom-right corner of the screen so it doesn't grab
+    focus like a centered modal dialog. Auto-accepts (SUGGESTION_YES) after
+    a short countdown, shown as a shrinking progress bar.
+
+    Buttons:
+    - "Ja": switch immediately (or just let the countdown run out)
+    - "Nein": skip this one suggestion (after 3x for the same pairing, it's
+      silenced automatically — see Repository.record_rejection)
+    - "Ja, immer": switch now AND remember this Outlook-category →
+      App-category pairing as trusted — future detections switch
+      automatically without showing this popup again (reactivatable later
+      in Einstellungen → Outlook)
     """
 
     def __init__(
@@ -33,53 +45,89 @@ class SuggestionPopup(QDialog):
         parent=None,
     ):
         super().__init__(parent)
-        self.setWindowTitle("Kategorie erkannt")
         self.setWindowFlags(
-            Qt.WindowType.Dialog | Qt.WindowType.WindowStaysOnTopHint
+            Qt.WindowType.Tool
+            | Qt.WindowType.FramelessWindowHint
+            | Qt.WindowType.WindowStaysOnTopHint
         )
-        self.setMinimumWidth(360)
+        self.setFixedWidth(300)
+        self.setStyleSheet(
+            """
+            QDialog { background: #2b2b2b; border: 1px solid #454545; border-radius: 8px; }
+            QLabel { color: #e8e8e8; font-size: 12px; }
+            QProgressBar { background: #454545; border: none; border-radius: 2px; }
+            QProgressBar::chunk { background: #6aa0ff; border-radius: 2px; }
+            QPushButton {
+                background: #3c3c3c; color: #e8e8e8; border: 1px solid #555555;
+                border-radius: 4px; padding: 3px 10px; font-size: 11px;
+            }
+            QPushButton:hover { background: #484848; }
+            QPushButton:default { border-color: #6aa0ff; }
+            """
+        )
 
         layout = QVBoxLayout(self)
+        layout.setContentsMargins(14, 12, 14, 10)
 
         label = QLabel(
-            f'Outlook erkennt: "<b>{outlook_name}</b>" '
-            f"→ <b>{app_category_name}</b>. Übernehmen?"
+            f'Kategorie wird gewechselt: "<b>{outlook_name}</b>" → <b>{app_category_name}</b>'
         )
         label.setTextFormat(Qt.TextFormat.RichText)
         label.setWordWrap(True)
         layout.addWidget(label)
 
+        self._progress_bar = QProgressBar()
+        self._progress_bar.setTextVisible(False)
+        self._progress_bar.setFixedHeight(4)
+        layout.addWidget(self._progress_bar)
+
         btns = QHBoxLayout()
-        self._yes_btn = QPushButton(f"Ja ({_COUNTDOWN_SECONDS})")
+        yes_btn = QPushButton("Ja")
         no_btn = QPushButton("Nein")
-        never_btn = QPushButton("Nie mehr")
+        always_btn = QPushButton("Ja, immer")
+        always_btn.setToolTip(
+            "Diese Zuordnung künftig automatisch übernehmen, ohne Nachfrage."
+        )
 
-        self._yes_btn.setDefault(True)
-        self._yes_btn.clicked.connect(lambda: self.done(SUGGESTION_YES))
+        yes_btn.setDefault(True)
+        yes_btn.clicked.connect(lambda: self.done(SUGGESTION_YES))
         no_btn.clicked.connect(lambda: self.done(SUGGESTION_NO))
-        never_btn.clicked.connect(lambda: self.done(SUGGESTION_NEVER))
+        always_btn.clicked.connect(lambda: self.done(SUGGESTION_ALWAYS))
 
-        btns.addWidget(self._yes_btn)
+        btns.addWidget(yes_btn)
         btns.addWidget(no_btn)
-        btns.addWidget(never_btn)
+        btns.addWidget(always_btn)
         layout.addLayout(btns)
 
-        self._countdown = _COUNTDOWN_SECONDS
+        self._remaining_ms = _COUNTDOWN_SECONDS * 1000
+        self._progress_bar.setRange(0, self._remaining_ms)
+        self._progress_bar.setValue(self._remaining_ms)
         self._auto_timer = QTimer(self)
-        self._auto_timer.setInterval(1000)
+        self._auto_timer.setInterval(_TICK_MS)
         self._auto_timer.timeout.connect(self._tick)
         self._auto_timer.start()
 
     def _tick(self) -> None:
-        self._countdown -= 1
-        self._yes_btn.setText(f"Ja ({self._countdown})")
-        if self._countdown <= 0:
+        self._remaining_ms -= _TICK_MS
+        self._progress_bar.setValue(max(self._remaining_ms, 0))
+        if self._remaining_ms <= 0:
             self.done(SUGGESTION_YES)
 
     def done(self, result: int) -> None:
         if self._auto_timer.isActive():
             self._auto_timer.stop()
         super().done(result)
+
+    def showEvent(self, event) -> None:
+        super().showEvent(event)
+        screen = self.screen()
+        if screen is None:
+            return
+        geo = screen.availableGeometry()
+        frame = self.frameGeometry()
+        x = geo.right() - frame.width() - _SCREEN_MARGIN
+        y = geo.bottom() - frame.height() - _SCREEN_MARGIN
+        self.move(x, y)
 
 
 class MeetingCategoryDialog(QDialog):

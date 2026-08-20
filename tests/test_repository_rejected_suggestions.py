@@ -58,4 +58,33 @@ def test_list_rejected_suggestions_fields(repo, setup):
     assert s.app_category_id == setup["cat_id"]
     assert s.rejection_count == 1
     assert s.silenced is False
+    assert s.auto_accept is False
     assert s.last_rejected_at is not None
+
+
+def test_not_auto_accept_initially(repo, setup):
+    assert repo.is_auto_accept("coding", setup["cat_id"]) is False
+
+
+def test_mark_auto_accept(repo, setup):
+    repo.mark_auto_accept("coding", setup["cat_id"])
+    assert repo.is_auto_accept("coding", setup["cat_id"]) is True
+    s = repo.list_rejected_suggestions()[0]
+    assert s.auto_accept is True
+    assert s.silenced is False
+
+
+def test_mark_auto_accept_clears_silenced(repo, setup):
+    """auto_accept and silenced are mutually exclusive outcomes of the same
+    popup — marking auto-accept must undo a prior silence."""
+    repo.record_rejection("coding", setup["cat_id"], immediate_silence=True)
+    repo.mark_auto_accept("coding", setup["cat_id"])
+    assert repo.is_silenced("coding", setup["cat_id"]) is False
+    assert repo.is_auto_accept("coding", setup["cat_id"]) is True
+
+
+def test_set_auto_accept_can_disable(repo, setup):
+    repo.mark_auto_accept("coding", setup["cat_id"])
+    s = repo.list_rejected_suggestions()[0]
+    repo.set_auto_accept(s.id, False)
+    assert repo.is_auto_accept("coding", setup["cat_id"]) is False

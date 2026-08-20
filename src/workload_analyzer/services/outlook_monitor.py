@@ -28,6 +28,7 @@ class _OutlookWorker(QObject):
         self._timer = QTimer(self)
         self._timer.timeout.connect(self._poll)
         self._last_category: Optional[str] = None
+        self._pending_category: Optional[str] = None
         self._in_meeting: bool = False
         self._available: Optional[bool] = None
         self._interval_ms: int = 15_000
@@ -88,10 +89,22 @@ class _OutlookWorker(QObject):
         except Exception as exc:
             _log.debug("_check_inspector error: %s", exc)
 
-        if category != self._last_category:
-            self._last_category = category
-            if category:
-                self.category_detected.emit(category)
+        if category == self._last_category:
+            self._pending_category = None
+            return
+
+        # Require the same new category on two consecutive polls before
+        # switching. A single-poll blip — e.g. a reminder briefly opening an
+        # old item — must not be mistaken for the user actually changing
+        # what they're working on.
+        if category != self._pending_category:
+            self._pending_category = category
+            return
+
+        self._pending_category = None
+        self._last_category = category
+        if category:
+            self.category_detected.emit(category)
 
     def _check_meeting(self, app) -> None:
         now = datetime.datetime.now()
@@ -101,7 +114,21 @@ class _OutlookWorker(QObject):
         try:
             ns = app.GetNamespace("MAPI")
             folder = ns.GetDefaultFolder(9)
-            for item in folder.Items:
+            # Restrict the query to appointments occurring *now* instead of
+            # iterating the whole calendar on every poll. The full-folder scan
+            # forced Outlook to marshal every appointment over COM each cycle —
+            # O(calendar size) work that pegged OUTLOOK.EXE. Restrict() makes
+            # Outlook do the filtering and returns only the few relevant items.
+            # Sort + IncludeRecurrences are required so recurring meetings are
+            # expanded and considered (the old code missed them entirely).
+            now_str = now.strftime("%m/%d/%Y %H:%M")
+            items = folder.Items
+            items.Sort("[Start]")
+            items.IncludeRecurrences = True
+            current = items.Restrict(
+                f"[Start] <= '{now_str}' AND [End] >= '{now_str}'"
+            )
+            for item in current:
                 try:
                     if item.Start <= now <= item.End:
                         title = item.Subject
