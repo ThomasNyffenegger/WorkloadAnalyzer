@@ -57,11 +57,21 @@ python -m pytest tests/ -x -q
 
 ## Installer bauen
 
+PyInstaller-Build **ausserhalb** von OneDrive laufen lassen (OneDrive hält Datei-Locks auf `build/`/`dist/`, und lange Pfade sprengen die 260-Zeichen-Grenze):
+
 ```bash
-python -m PyInstaller WorkloadAnalyzer.spec --noconfirm
-"/c/Program Files (x86)/Inno Setup 6/ISCC.exe" installer/WorkloadAnalyzer.iss
+python -m PyInstaller WorkloadAnalyzer.spec --noconfirm --distpath "C:\Users\<user>\wab\dist" --workpath "C:\Users\<user>\wab\build"
+```
+
+Ergebnis zurück ins Projekt kopieren (Inno Setups `Source:` erwartet `..\dist\WorkloadAnalyzer\*` relativ zu `installer/`), dann kompilieren:
+
+```bash
+cp -r "C:\Users\<user>\wab\dist\WorkloadAnalyzer" dist/WorkloadAnalyzer
+"C:\Users\<user>\AppData\Local\Programs\Inno Setup 6\ISCC.exe" installer/WorkloadAnalyzer.iss
 # → installer/Output/WorkloadAnalyzer_Setup.exe
 ```
+
+ISCC.exe-Pfad hängt vom Install-Modus ab: per-user (winget-Standard) liegt es unter `%LOCALAPPDATA%\Programs\Inno Setup 6`, ein systemweiter Install unter `C:\Program Files (x86)\Inno Setup 6`.
 
 ## Neue Phase starten
 

@@ -4,6 +4,7 @@ AppVersion=1.0.0
 AppPublisher=WorkloadAnalyzer
 DefaultDirName={autopf}\WorkloadAnalyzer
 DefaultGroupName=WorkloadAnalyzer
+PrivilegesRequired=lowest
 OutputDir=Output
 OutputBaseFilename=WorkloadAnalyzer_Setup
 Compression=lzma
@@ -22,7 +23,7 @@ Source: "..\dist\WorkloadAnalyzer\*"; DestDir: "{app}"; Flags: ignoreversion rec
 [Icons]
 Name: "{group}\WorkloadAnalyzer"; Filename: "{app}\WorkloadAnalyzer.exe"
 Name: "{group}\{cm:UninstallProgram,WorkloadAnalyzer}"; Filename: "{uninstallexe}"
-Name: "{commondesktop}\WorkloadAnalyzer"; Filename: "{app}\WorkloadAnalyzer.exe"; Tasks: desktopicon
+Name: "{autodesktop}\WorkloadAnalyzer"; Filename: "{app}\WorkloadAnalyzer.exe"; Tasks: desktopicon
 
 [Run]
 Filename: "{app}\WorkloadAnalyzer.exe"; Description: "{cm:LaunchProgram,WorkloadAnalyzer}"; Flags: nowait postinstall skipifsilent

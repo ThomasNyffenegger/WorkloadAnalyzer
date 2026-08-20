@@ -4,7 +4,9 @@ a = Analysis(
     ['src/workload_analyzer/__main__.py'],
     pathex=['.'],
     binaries=[],
-    datas=[],
+    datas=[
+        ('src/workload_analyzer/db/schema.sql', 'workload_analyzer/db'),
+    ],
     hiddenimports=[
         'win32com',
         'win32com.client',
