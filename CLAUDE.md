@@ -8,7 +8,7 @@ Windows-Tray-App zur automatischen Zeiterfassung. Erfasst, welche Kategorie (Auf
 
 **Stack:** Python 3.11+, PyQt6, SQLite (WAL), openpyxl, pytest  
 **Entry Point:** `src/workload_analyzer/__main__.py` → `app.run()`  
-**Installer:** PyInstaller + Inno Setup (`WorkloadAnalyzer.spec` + `installer/WorkloadAnalyzer.iss`)
+**Installer:** Nuitka + Inno Setup (`installer/WorkloadAnalyzer.iss`) — switched from PyInstaller after Windows Defender flagged its self-extracting bootloader as `Trojan:Win32/Bearfoos.B!ml` / `Trojan:Script/Wacatac.H!ml` (ML heuristic false positives); Nuitka compiles to native code and doesn't trigger them.
 
 ## Architektur
 
@@ -57,21 +57,46 @@ python -m pytest tests/ -x -q
 
 ## Installer bauen
 
-PyInstaller-Build **ausserhalb** von OneDrive laufen lassen (OneDrive hält Datei-Locks auf `build/`/`dist/`, und lange Pfade sprengen die 260-Zeichen-Grenze):
+**Build braucht ein venv ausserhalb von OneDrive** — nicht nur `--output-dir`. Nuitkas eigener Compiler-Cache (`clcache`) bricht reihenweise mit "preprocessor failed" ab, wenn Nuitka/das venv selbst innerhalb des OneDrive-synchronisierten Ordners liegt (OneDrive-Datei-Locks, gleiche Ursache wie beim alten PyInstaller-Problem, trifft hier aber die venv-Include-Pfade, nicht nur `dist/`/`build/`).
+
+Einmalig einrichten:
 
 ```bash
-python -m PyInstaller WorkloadAnalyzer.spec --noconfirm --distpath "C:\Users\<user>\wab\dist" --workpath "C:\Users\<user>\wab\build"
+python -m venv "C:\Users\<user>\wab\venv"
+"C:\Users\<user>\wab\venv\Scripts\pip" install nuitka "PyQt6>=6.6" "openpyxl>=3.1" "matplotlib>=3.8" "pywin32>=306"
+"C:\Users\<user>\wab\venv\Scripts\pip" install --no-deps -e .
 ```
+
+Build (aus dem Projektverzeichnis heraus, aber mit dem externen venv):
+
+```bash
+"C:\Users\<user>\wab\venv\Scripts\python" -m nuitka \
+  --mode=standalone \
+  --windows-console-mode=disable \
+  --enable-plugin=pyqt6 \
+  --disable-cache=ccache \
+  --include-data-files=src/workload_analyzer/db/schema.sql=workload_analyzer/db/schema.sql \
+  --output-dir="C:\Users\<user>\wab\nuitka" \
+  --output-filename=WorkloadAnalyzer.exe \
+  --company-name=WorkloadAnalyzer --product-name=WorkloadAnalyzer \
+  --file-version=1.0.0.0 --product-version=1.0.0.0 \
+  --assume-yes-for-downloads \
+  src/workload_analyzer/__main__.py
+```
+
+**PIL nicht ausschliessen** — `--nofollow-import-to=PIL` sieht nach sinnvoller Verschlankung aus (Pillow wird nirgends direkt importiert), bricht aber matplotlib komplett (`matplotlib.colors` importiert PIL fest beim Modul-Load). Erst getestet mit einem Mini-Repro-Skript, bevor der volle Build läuft, spart Zeit.
 
 Ergebnis zurück ins Projekt kopieren (Inno Setups `Source:` erwartet `..\dist\WorkloadAnalyzer\*` relativ zu `installer/`), dann kompilieren:
 
 ```bash
-cp -r "C:\Users\<user>\wab\dist\WorkloadAnalyzer" dist/WorkloadAnalyzer
+cp -r "C:\Users\<user>\wab\nuitka\__main__.dist" dist/WorkloadAnalyzer
 "C:\Users\<user>\AppData\Local\Programs\Inno Setup 6\ISCC.exe" installer/WorkloadAnalyzer.iss
 # → installer/Output/WorkloadAnalyzer_Setup.exe
 ```
 
 ISCC.exe-Pfad hängt vom Install-Modus ab: per-user (winget-Standard) liegt es unter `%LOCALAPPDATA%\Programs\Inno Setup 6`, ein systemweiter Install unter `C:\Program Files (x86)\Inno Setup 6`.
+
+Vor dem Verteilen empfiehlt sich ein gezielter Defender-Scan gegen die frisch gebaute Setup.exe (`Start-MpScan -ScanType CustomScan -ScanPath ...`), um False Positives früh zu erkennen statt erst beim Nutzer.
 
 ## Neue Phase starten
 

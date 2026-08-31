@@ -17,6 +17,12 @@ Name: "german"; MessagesFile: "compiler:Languages\German.isl"
 [Tasks]
 Name: "desktopicon"; Description: "{cm:CreateDesktopIcon}"; GroupDescription: "{cm:AdditionalIcons}"
 
+[InstallDelete]
+; Remove leftovers from the old PyInstaller build (its "_internal" layout
+; doesn't exist in the current Nuitka build and Inno Setup won't clean up
+; files that are no longer part of [Files] on an upgrade install).
+Type: filesandordirs; Name: "{app}\_internal"
+
 [Files]
 Source: "..\dist\WorkloadAnalyzer\*"; DestDir: "{app}"; Flags: ignoreversion recursesubdirs createallsubdirs
 

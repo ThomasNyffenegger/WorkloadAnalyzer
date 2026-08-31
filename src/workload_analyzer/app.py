@@ -4,9 +4,9 @@ import time
 from pathlib import Path
 
 from PyQt6.QtCore import QTimer
-from PyQt6.QtWidgets import QApplication, QInputDialog
+from PyQt6.QtWidgets import QApplication
 
-from workload_analyzer.core.tracker import TimeTracker, TrackerState
+from workload_analyzer.core.tracker import TimeTracker
 from workload_analyzer.db.connection import connect
 from workload_analyzer.db.repository import OverlapError, Repository
 from workload_analyzer.models import EntrySource
@@ -55,13 +55,12 @@ def run() -> int:
     if not cats:
         return 0
 
-    # If not currently tracking, ask which category to start with.
-    if tracker.current_state().kind != TrackerState.Kind.TRACKING:
-        names = [c.name for c in cats]
-        choice, ok = QInputDialog.getItem(None, "Womit beginnst du?", "Kategorie:", names, 0, False)
-        if ok:
-            cat = next(c for c in cats if c.name == choice)
-            tracker.start(category_id=cat.id, source=EntrySource.MANUAL)
+    # If not currently tracking, stay idle rather than blocking startup with
+    # a modal dialog — that dialog has no parent window and, launched via
+    # Windows autostart, can end up hidden behind other startup windows
+    # with no tray icon shown until it's answered (looks like autostart
+    # silently failed). The user picks a category via the tray's "Switch
+    # to…" menu, a hotkey, or Outlook auto-detection once they start work.
 
     tray = TrayIcon(repo=repo, tracker=tracker)
 
