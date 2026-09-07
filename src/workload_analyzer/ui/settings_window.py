@@ -1,4 +1,3 @@
-import sys
 from pathlib import Path
 from typing import Optional
 
@@ -212,9 +211,9 @@ class SettingsWindow(QDialog):
 
         # Autostart
         from workload_analyzer.services import autostart as _autostart
+        from workload_analyzer.paths import is_frozen
         self._autostart_checkbox = QCheckBox()
-        is_frozen = getattr(sys, "frozen", False)
-        if is_frozen:
+        if is_frozen():
             self._autostart_checkbox.setChecked(_autostart.is_enabled())
         else:
             self._autostart_checkbox.setEnabled(False)
@@ -247,11 +246,12 @@ class SettingsWindow(QDialog):
             self._system_monitor.set_idle_threshold(value * 60)
 
     def _save_autostart(self, checked: bool) -> None:
-        if not getattr(sys, "frozen", False):
+        from workload_analyzer.paths import is_frozen, frozen_executable_path
+        if not is_frozen():
             return
         from workload_analyzer.services import autostart as _autostart
         if checked:
-            _autostart.enable(sys.executable)
+            _autostart.enable(frozen_executable_path())
         else:
             _autostart.disable()
 
