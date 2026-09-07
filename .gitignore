@@ -9,3 +9,4 @@ dist/
 build/
 .ruff_cache/
 installer/Output/
+.claude/settings.local.json
