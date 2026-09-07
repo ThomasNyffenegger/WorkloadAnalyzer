@@ -25,7 +25,7 @@ services/
   outlook_monitor.py    — COM-Polling in QThread (_OutlookWorker), Signale: category_detected, meeting_started/ended, availability_changed
   system_monitor.py     — WTS-Events (Lock/Unlock) + GetLastInputInfo (Idle), QAbstractNativeEventFilter
   hotkey_manager.py     — GlobalHotkeyManager, Ctrl+Shift+1..9
-  autostart.py          — Registry HKCU\...\Run
+  autostart.py          — Scheduled Task ("At log on") via Task Scheduler COM API — NOT the registry Run key (silently ignored on this managed machine) and NOT schtasks.exe (blocked by policy); see STATUS.md/memory for why
   backup.py             — Startup-Dateikopie
   export.py             — XLSX-Pivot (Tage × Kategorien)
 ui/
@@ -33,7 +33,7 @@ ui/
   floating_widget.py    — Always-on-top Widget, Drag, State-Cache, invalidate_categories()
   settings_window.py    — Tabs: Kategorien, Rollen, Outlook, System, Backup, Autostart
   suggestion_popup.py   — Auto-Close 10s Countdown, SUGGESTION_YES/NO/NEVER
-  recovery_popup.py     — Nach Lock/Idle: Vorherige/Andere/Verwerfen
+  recovery_popup.py     — Nach Lock/Idle: Kategorie-Dropdown (vorherige vorgewählt) + Buchen/Verwerfen-Buttons
   import_outlook_dialog.py — Outlook-Kategorien importieren → neue Kategorien anlegen
   reports_window.py     — Berichte mit Datumsfilter + XLSX-Export
 ```

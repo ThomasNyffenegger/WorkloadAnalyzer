@@ -147,7 +147,7 @@ def run() -> int:
     # ------------------------------------------------------------------
     from workload_analyzer.services.system_monitor import SystemMonitor
     from workload_analyzer.ui.recovery_popup import (
-        RecoveryPopup, RECOVERY_PREVIOUS, RECOVERY_OTHER, RECOVERY_DISCARD,
+        RecoveryPopup, RECOVERY_BOOK, RECOVERY_DISCARD,
     )
 
     idle_threshold_minutes = int(
@@ -176,20 +176,13 @@ def run() -> int:
         popup = RecoveryPopup(absent_seconds, reason, prev_cat, active_cats)
         result = popup.exec()
 
-        if result == RECOVERY_PREVIOUS and prev_cat_id is not None:
-            try:
-                repo.insert_closed_entry(prev_cat_id, absence_start_ts, absence_end_ts, source)
-            except OverlapError:
-                pass  # overlap guard — entry for this time range already exists
-            tracker.start(prev_cat_id, EntrySource.MANUAL)
-
-        elif result == RECOVERY_OTHER:
+        if result == RECOVERY_BOOK:
             chosen_id = popup.selected_category_id()
             if chosen_id is not None:
                 try:
                     repo.insert_closed_entry(chosen_id, absence_start_ts, absence_end_ts, source)
                 except OverlapError:
-                    pass
+                    pass  # overlap guard — entry for this time range already exists
                 tracker.start(chosen_id, EntrySource.MANUAL)
             elif prev_cat_id is not None:
                 # Empty category list edge case — fall back to previous category

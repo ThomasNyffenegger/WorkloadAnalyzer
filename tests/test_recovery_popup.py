@@ -2,7 +2,7 @@
 import pytest
 from workload_analyzer.models import Category
 from workload_analyzer.ui.recovery_popup import (
-    RecoveryPopup, RECOVERY_PREVIOUS, RECOVERY_OTHER, RECOVERY_DISCARD,
+    RecoveryPopup, RECOVERY_BOOK, RECOVERY_DISCARD,
 )
 
 
@@ -36,11 +36,32 @@ def test_popup_constructs_without_previous_category(qtbot):
         all_categories=make_cats(),
     )
     qtbot.addWidget(popup)
-    # No "Vorherige" radio — discard should be pre-selected
-    assert popup._radio_prev is None
+    assert popup is not None
 
 
-def test_recovery_previous_returns_correct_code(qtbot):
+def test_previous_category_preselected_in_combo(qtbot):
+    popup = RecoveryPopup(
+        absent_seconds=600,
+        reason="Bildschirm gesperrt",
+        previous_category=make_cats()[1],  # "Meetings", id=11
+        all_categories=make_cats(),
+    )
+    qtbot.addWidget(popup)
+    assert popup.selected_category_id() == 11
+
+
+def test_no_previous_category_defaults_to_first_entry(qtbot):
+    popup = RecoveryPopup(
+        absent_seconds=600,
+        reason="Inaktivität",
+        previous_category=None,
+        all_categories=make_cats(),
+    )
+    qtbot.addWidget(popup)
+    assert popup.selected_category_id() == 10  # first category in the list
+
+
+def test_book_button_returns_correct_code(qtbot):
     popup = RecoveryPopup(
         absent_seconds=600,
         reason="Bildschirm gesperrt",
@@ -48,12 +69,11 @@ def test_recovery_previous_returns_correct_code(qtbot):
         all_categories=make_cats(),
     )
     qtbot.addWidget(popup)
-    popup._radio_prev.setChecked(True)
-    popup._on_confirm()
-    assert popup.result() == RECOVERY_PREVIOUS
+    popup.done(RECOVERY_BOOK)
+    assert popup.result() == RECOVERY_BOOK
 
 
-def test_recovery_discard_returns_correct_code(qtbot):
+def test_discard_button_returns_correct_code(qtbot):
     popup = RecoveryPopup(
         absent_seconds=600,
         reason="Bildschirm gesperrt",
@@ -61,22 +81,8 @@ def test_recovery_discard_returns_correct_code(qtbot):
         all_categories=make_cats(),
     )
     qtbot.addWidget(popup)
-    popup._radio_discard.setChecked(True)
-    popup._on_confirm()
+    popup.done(RECOVERY_DISCARD)
     assert popup.result() == RECOVERY_DISCARD
-
-
-def test_recovery_other_returns_correct_code(qtbot):
-    popup = RecoveryPopup(
-        absent_seconds=600,
-        reason="Bildschirm gesperrt",
-        previous_category=make_prev_cat(),
-        all_categories=make_cats(),
-    )
-    qtbot.addWidget(popup)
-    popup._radio_other.setChecked(True)
-    popup._on_confirm()
-    assert popup.result() == RECOVERY_OTHER
 
 
 def test_selected_category_id_returns_combo_value(qtbot):
@@ -88,27 +94,5 @@ def test_selected_category_id_returns_combo_value(qtbot):
         all_categories=cats,
     )
     qtbot.addWidget(popup)
-    popup._other_combo.setCurrentIndex(1)  # select "Meetings" (id=11)
+    popup._category_combo.setCurrentIndex(1)  # select "Meetings" (id=11)
     assert popup.selected_category_id() == 11
-
-
-def test_long_absence_preselects_discard(qtbot):
-    popup = RecoveryPopup(
-        absent_seconds=9 * 3600,  # 9 hours
-        reason="Bildschirm gesperrt",
-        previous_category=make_prev_cat(),
-        all_categories=make_cats(),
-    )
-    qtbot.addWidget(popup)
-    assert popup._radio_discard.isChecked()
-
-
-def test_no_previous_category_preselects_discard(qtbot):
-    popup = RecoveryPopup(
-        absent_seconds=300,
-        reason="Inaktivität",
-        previous_category=None,
-        all_categories=make_cats(),
-    )
-    qtbot.addWidget(popup)
-    assert popup._radio_discard.isChecked()

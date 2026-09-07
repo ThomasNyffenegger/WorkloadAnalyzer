@@ -5,22 +5,30 @@ from typing import Optional
 
 from PyQt6.QtCore import Qt
 from PyQt6.QtWidgets import (
-    QButtonGroup, QComboBox, QDialog, QHBoxLayout, QLabel,
-    QPushButton, QRadioButton, QVBoxLayout,
+    QComboBox, QDialog, QHBoxLayout, QLabel, QPushButton, QVBoxLayout,
 )
 
 from workload_analyzer.models import Category
 
 # Return codes from RecoveryPopup.exec()
-RECOVERY_PREVIOUS = 1
-RECOVERY_OTHER    = 2
-RECOVERY_DISCARD  = 3
+RECOVERY_BOOK    = 1
+RECOVERY_DISCARD = 2
+
+
+def _centered(button: QPushButton, max_width: int = 180) -> QHBoxLayout:
+    """Cap a button's width and center it instead of stretching full-width."""
+    button.setMaximumWidth(max_width)
+    row = QHBoxLayout()
+    row.addStretch()
+    row.addWidget(button)
+    row.addStretch()
+    return row
 
 
 class RecoveryPopup(QDialog):
     """Asks the user what to do with absent time after screen lock or idle.
 
-    Stays open until user clicks "Bestätigen" (no X-button close, no auto-close).
+    Stays open until the user picks an action (no X-button close, no auto-close).
 
     Parameters
     ----------
@@ -30,8 +38,9 @@ class RecoveryPopup(QDialog):
         Human-readable cause, e.g. "Bildschirm gesperrt" or "Inaktivität".
     previous_category:
         The category that was active before absence, or None if tracker was idle.
+        Pre-selected in the category dropdown.
     all_categories:
-        All active categories for the "other" picker.
+        All active categories to choose from.
     """
 
     def __init__(
@@ -52,10 +61,9 @@ class RecoveryPopup(QDialog):
         )
         self.setMinimumWidth(420)
 
-        self._other_combo: Optional[QComboBox] = None
-        self._radio_prev: Optional[QRadioButton] = None
-
         layout = QVBoxLayout(self)
+        layout.setContentsMargins(24, 20, 24, 20)
+        layout.setSpacing(14)
 
         # Header label
         minutes = max(1, absent_seconds // 60)
@@ -74,49 +82,41 @@ class RecoveryPopup(QDialog):
             warn.setTextFormat(Qt.TextFormat.RichText)
             layout.addWidget(warn)
 
-        self._group = QButtonGroup(self)
+        # Actions stacked vertically: Verwerfen right below the recommendation,
+        # then the category picker, then Buchen to commit it. Buttons are
+        # capped in width and centered rather than stretched full-width.
+        discard_btn = QPushButton("Verwerfen")
+        discard_btn.clicked.connect(lambda: self.done(RECOVERY_DISCARD))
+        layout.addLayout(_centered(discard_btn))
 
-        # Option A: previous category (hidden when previous_category is None)
-        if previous_category is not None:
-            self._radio_prev = QRadioButton(
-                f"Auf vorherige Kategorie buchen  ({previous_category.name})"
-            )
-            self._radio_prev.setChecked(not long_absence)
-            self._group.addButton(self._radio_prev, RECOVERY_PREVIOUS)
-            layout.addWidget(self._radio_prev)
+        layout.addSpacing(6)
 
-        # Option B: other category
-        other_row = QHBoxLayout()
-        self._radio_other = QRadioButton("Andere Kategorie wählen")
-        self._group.addButton(self._radio_other, RECOVERY_OTHER)
-        other_row.addWidget(self._radio_other)
-        self._other_combo = QComboBox()
-        for cat in all_categories:
-            self._other_combo.addItem(cat.name, userData=cat.id)
-        other_row.addWidget(self._other_combo, 1)
-        layout.addLayout(other_row)
+        # Category picker — previous category pre-selected when available
+        combo_row = QHBoxLayout()
+        combo_row.addWidget(QLabel("Kategorie:"))
+        self._category_combo = QComboBox()
+        selected_index = 0
+        for i, cat in enumerate(all_categories):
+            self._category_combo.addItem(cat.name, userData=cat.id)
+            if previous_category is not None and cat.id == previous_category.id:
+                selected_index = i
+        if all_categories:
+            self._category_combo.setCurrentIndex(selected_index)
+        combo_row.addWidget(self._category_combo, 1)
+        layout.addLayout(combo_row)
 
-        # Option C: discard
-        self._radio_discard = QRadioButton("Verwerfen (Zeit nicht buchen)")
+        layout.addSpacing(6)
+
+        book_btn = QPushButton("Buchen")
+        book_btn.clicked.connect(lambda: self.done(RECOVERY_BOOK))
+        book_btn.setEnabled(bool(all_categories))
+        layout.addLayout(_centered(book_btn))
+
         if long_absence or previous_category is None:
-            self._radio_discard.setChecked(True)
-        self._group.addButton(self._radio_discard, RECOVERY_DISCARD)
-        layout.addWidget(self._radio_discard)
-
-        # Confirm button — only way to close
-        confirm = QPushButton("Bestätigen")
-        confirm.setDefault(True)
-        confirm.clicked.connect(self._on_confirm)
-        layout.addWidget(confirm)
-
-    def _on_confirm(self) -> None:
-        choice = self._group.checkedId()
-        if choice == -1:
-            choice = RECOVERY_DISCARD
-        self.done(choice)
+            discard_btn.setDefault(True)
+        else:
+            book_btn.setDefault(True)
 
     def selected_category_id(self) -> Optional[int]:
-        """Return the chosen 'other' category id. Meaningful only when result == RECOVERY_OTHER."""
-        if self._other_combo is None:
-            return None
-        return self._other_combo.currentData()
+        """Return the chosen category id. Meaningful only when result == RECOVERY_BOOK."""
+        return self._category_combo.currentData()
