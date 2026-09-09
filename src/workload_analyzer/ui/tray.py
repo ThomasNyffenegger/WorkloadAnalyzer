@@ -157,22 +157,29 @@ class TrayIcon(QObject):
                 if self._cached_cat:
                     role_name = self._cached_role.name if self._cached_role else ""
                     self._header_action.setText(f"{self._cached_cat.name} ({role_name})")
-                    self.icon.setToolTip(f"Tracking: {self._cached_cat.name}")
+            base_tooltip = f"Tracking: {self._cached_cat.name}" if self._cached_cat else "WorkloadAnalyzer"
             self._pause_action.setEnabled(True)
             self._resume_action.setEnabled(False)
         elif state.kind == TrackerState.Kind.PAUSED:
             self._header_action.setText("Paused")
-            self.icon.setToolTip("WorkloadAnalyzer (paused)")
+            base_tooltip = "WorkloadAnalyzer (paused)"
             self._pause_action.setEnabled(False)
             self._resume_action.setEnabled(True)
         else:
             self._header_action.setText("Not tracking")
-            self.icon.setToolTip("WorkloadAnalyzer")
+            base_tooltip = "WorkloadAnalyzer"
             self._pause_action.setEnabled(False)
             self._resume_action.setEnabled(False)
 
+        # Built fresh from base_tooltip every time — appending onto
+        # self.icon.toolTip() here instead would keep stacking the warning
+        # onto itself every 5s refresh while Outlook stays unavailable and
+        # the category doesn't change (that gate above only refreshes the
+        # base tooltip on a category change, so the old suffix survives).
+        tooltip = base_tooltip
         if not self._outlook_available:
-            self.icon.setToolTip(self.icon.toolTip() + " ⚠ Outlook nicht verfügbar")
+            tooltip += " ⚠ Outlook nicht verfügbar"
+        self.icon.setToolTip(tooltip)
 
         self._apply_icon(state)
 
