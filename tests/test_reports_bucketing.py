@@ -1,7 +1,78 @@
 """Tests for the pure bucketing/formatting helpers behind the reports bar chart."""
 import datetime
+from types import SimpleNamespace
 
-from workload_analyzer.ui.reports_window import _bucket_key, _bucket_label, _format_duration
+from workload_analyzer.ui.reports_window import (
+    _bucket_key, _bucket_label, _day_slices, _format_duration, _split_by_day,
+)
+
+
+def _ts(y, mo, d, h=0, mi=0):
+    return int(datetime.datetime(y, mo, d, h, mi).timestamp())
+
+
+def _entry(cat_id, start, end):
+    return SimpleNamespace(category_id=cat_id, start_ts=start, end_ts=end)
+
+
+def test_split_by_day_within_one_day():
+    start, end = _ts(2026, 10, 14, 9, 0), _ts(2026, 10, 14, 11, 30)
+    assert _split_by_day(start, end) == [(datetime.date(2026, 10, 14), 150 * 60)]
+
+
+def test_split_by_day_across_midnight():
+    # the real overnight entry: 14.10. 15:59 -> 15.10. 09:10
+    start, end = _ts(2026, 10, 14, 15, 59), _ts(2026, 10, 15, 9, 10)
+    assert _split_by_day(start, end) == [
+        (datetime.date(2026, 10, 14), (8 * 60 + 1) * 60),   # 15:59 -> 24:00
+        (datetime.date(2026, 10, 15), (9 * 60 + 10) * 60),  # 00:00 -> 09:10
+    ]
+
+
+def test_split_by_day_spans_several_days():
+    start, end = _ts(2026, 10, 14, 12, 0), _ts(2026, 10, 17, 6, 0)
+    pieces = _split_by_day(start, end)
+    assert [d for d, _ in pieces] == [
+        datetime.date(2026, 10, 14), datetime.date(2026, 10, 15),
+        datetime.date(2026, 10, 16), datetime.date(2026, 10, 17),
+    ]
+    assert sum(s for _, s in pieces) == end - start
+
+
+def test_split_by_day_empty_interval():
+    ts = _ts(2026, 10, 14, 9, 0)
+    assert _split_by_day(ts, ts) == []
+
+
+def test_day_slices_no_day_exceeds_24h_for_overnight_entry():
+    entry = _entry(1, _ts(2026, 10, 14, 15, 59), _ts(2026, 10, 15, 9, 10))
+    slices = _day_slices([entry], _ts(2026, 10, 9), _ts(2026, 10, 17), rounding=0)
+    per_day = {}
+    for _, day, minutes in slices:
+        per_day[day] = per_day.get(day, 0) + minutes
+    assert per_day[datetime.date(2026, 10, 14)] == 481
+    assert per_day[datetime.date(2026, 10, 15)] == 550
+    assert sum(per_day.values()) == 1031
+
+
+def test_day_slices_clips_entry_to_selected_range():
+    # range starts at 15.10. 00:00 — only the part after midnight counts
+    entry = _entry(1, _ts(2026, 10, 14, 15, 59), _ts(2026, 10, 15, 9, 10))
+    slices = _day_slices([entry], _ts(2026, 10, 15), _ts(2026, 10, 16), rounding=0)
+    assert slices == [(1, datetime.date(2026, 10, 15), 550.0)]
+
+
+def test_day_slices_rounding_is_spread_proportionally():
+    # 62 min with 5-min rounding -> 60 min total, all on one day
+    entry = _entry(1, _ts(2026, 10, 14, 9, 0), _ts(2026, 10, 14, 10, 2))
+    slices = _day_slices([entry], _ts(2026, 10, 14), _ts(2026, 10, 15), rounding=5)
+    assert len(slices) == 1
+    assert abs(slices[0][2] - 60.0) < 1e-9
+
+
+def test_day_slices_skips_non_positive_entries():
+    ts = _ts(2026, 10, 14, 9, 0)
+    assert _day_slices([_entry(1, ts, ts)], 0, 2**40, rounding=0) == []
 
 
 def test_bucket_key_day():

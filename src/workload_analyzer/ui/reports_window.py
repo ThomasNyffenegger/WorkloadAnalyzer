@@ -22,7 +22,50 @@ def _py_date_to_qdate(d: datetime.date) -> QDate:
     return QDate(d.year, d.month, d.day)
 
 
-def _bucket_key(dt: datetime.datetime, granularity: str) -> tuple:
+def _split_by_day(start_ts: int, end_ts: int) -> list[tuple[datetime.date, int]]:
+    """Split [start_ts, end_ts) at local midnights into (date, seconds) pieces.
+
+    Works on timestamps rather than naive datetime differences, so a DST
+    change inside the interval doesn't skew the seconds per day.
+    """
+    pieces: list[tuple[datetime.date, int]] = []
+    cur = start_ts
+    while cur < end_ts:
+        day = datetime.datetime.fromtimestamp(cur).date()
+        next_midnight = int(
+            datetime.datetime.combine(
+                day + datetime.timedelta(days=1), datetime.time.min
+            ).timestamp()
+        )
+        piece_end = min(next_midnight, end_ts)
+        if piece_end <= cur:  # defensive: never loop forever on odd clock data
+            break
+        pieces.append((day, piece_end - cur))
+        cur = piece_end
+    return pieces
+
+
+def _day_slices(entries, from_ts: int, to_ts: int, rounding: int) -> list[tuple[int, datetime.date, float]]:
+    """(category_id, date, minutes) per entry per local day, clipped to the range.
+
+    An entry crossing midnight (or the edge of the selected range) only
+    contributes the part that really falls on each day / inside the range —
+    bucketing a whole entry by its start day put 17 overnight hours onto one
+    day. The entry's rounded total is spread proportionally over its pieces,
+    so rounding behaves the same as in the table.
+    """
+    slices: list[tuple[int, datetime.date, float]] = []
+    for e in entries:
+        raw = e.end_ts - e.start_ts
+        if raw <= 0:
+            continue
+        rounded_min = round_seconds(raw, rounding) / 60
+        for day, secs in _split_by_day(max(e.start_ts, from_ts), min(e.end_ts, to_ts)):
+            slices.append((e.category_id, day, rounded_min * secs / raw))
+    return slices
+
+
+def _bucket_key(dt: datetime.date, granularity: str) -> tuple:
     """Group key for the bar chart's time axis — same key = same bar."""
     if granularity == "Tag":
         return (dt.year, dt.month, dt.day)
@@ -299,12 +342,11 @@ class ReportsWindow(QDialog):
         rounding = int(self._repo.get_setting("rounding_minutes", "0") or "0")
 
         usable = [e for e in entries if cats.get(e.category_id) is not None]
-        total_minutes = sum(
-            round_seconds(e.duration_seconds(), rounding) / 60 for e in usable
-        )
+        slices = _day_slices(usable, from_ts, to_ts, rounding)
+        total_minutes = sum(minutes for _, _, minutes in slices)
         self._total_label.setText(f"Gesamt: {_format_duration(total_minutes)}")
 
-        if not usable:
+        if not slices:
             self._chart_placeholder.setText("Keine Daten im Zeitraum")
             if self._canvas is not None:
                 self._canvas.setVisible(False)
@@ -326,20 +368,19 @@ class ReportsWindow(QDialog):
         ax = fig.add_subplot(111)
 
         if self._chart_type_kreis_btn.isChecked():
-            self._draw_pie(ax, usable, cats, roles, rounding)
+            self._draw_pie(ax, slices, cats, roles)
         else:
-            self._draw_bars(ax, usable, cats, rounding)
+            self._draw_bars(ax, slices, cats)
 
         self._canvas.draw()
 
-    def _draw_pie(self, ax, entries, cats, roles, rounding) -> None:
+    def _draw_pie(self, ax, slices, cats, roles) -> None:
         group_by_role = self._group_combo.currentIndex() == 0
 
         totals: dict[str, float] = {}
-        for entry in entries:
-            cat = cats[entry.category_id]
+        for cat_id, _day, dur_min in slices:
+            cat = cats[cat_id]
             label = roles[cat.role_id].name if group_by_role else cat.name
-            dur_min = round_seconds(entry.duration_seconds(), rounding) / 60
             totals[label] = totals.get(label, 0) + dur_min
 
         labels = list(totals.keys())
@@ -348,16 +389,13 @@ class ReportsWindow(QDialog):
         ax.pie(sizes, labels=labels, autopct="%1.1f%%", wedgeprops=wedge_props)
         ax.set_title("Zeitverteilung (Minuten)")
 
-    def _draw_bars(self, ax, entries, cats, rounding) -> None:
+    def _draw_bars(self, ax, slices, cats) -> None:
         granularity = self._granularity_group.checkedButton().text()
 
         per_bucket: dict[tuple, dict[int, float]] = {}
-        for entry in entries:
-            dt = datetime.datetime.fromtimestamp(entry.start_ts)
-            key = _bucket_key(dt, granularity)
-            dur_min = round_seconds(entry.duration_seconds(), rounding) / 60
-            bucket = per_bucket.setdefault(key, {})
-            bucket[entry.category_id] = bucket.get(entry.category_id, 0) + dur_min
+        for cat_id, day, dur_min in slices:
+            bucket = per_bucket.setdefault(_bucket_key(day, granularity), {})
+            bucket[cat_id] = bucket.get(cat_id, 0) + dur_min
 
         bucket_keys = sorted(per_bucket.keys())
         cat_ids = sorted(
@@ -367,21 +405,17 @@ class ReportsWindow(QDialog):
         if not cat_ids:
             return
 
-        totals_by_cat = {
-            cid: sum(per_bucket[k].get(cid, 0) for k in bucket_keys) for cid in cat_ids
-        }
-        grand_total = sum(totals_by_cat.values()) or 1
+        bucket_totals = [sum(per_bucket[k].values()) for k in bucket_keys]
 
         bar_count = len(cat_ids)
         width = 0.8 / bar_count
         for i, cid in enumerate(cat_ids):
             cat = cats[cid]
-            pct = totals_by_cat[cid] / grand_total * 100
             values = [per_bucket[k].get(cid, 0) for k in bucket_keys]
             offset = (i - (bar_count - 1) / 2) * width
             positions = [x + offset for x in range(len(bucket_keys))]
             ax.bar(positions, values, width=width, color=cat.color)
-            for x_pos, value in zip(positions, values):
+            for x_pos, value, bucket_total in zip(positions, values, bucket_totals):
                 # Category name below every bar (rotated), anchored to the
                 # axis line rather than the bar's own height so the top
                 # letter lines up across bars regardless of value.
@@ -389,11 +423,13 @@ class ReportsWindow(QDialog):
                     x_pos, -0.02, cat.name, transform=ax.get_xaxis_transform(),
                     rotation=90, ha="center", va="top", fontsize=9, clip_on=False,
                 )
-                # Category's overall share of the grand total, on top of
-                # each bar — skip zero-height bars, nothing to label there.
+                # Share of this bar's own day/week/month, on top of the bar
+                # (a category-wide share would repeat the same number on
+                # every bar of that category, whatever its height) — skip
+                # zero-height bars, nothing to label there.
                 if value > 0:
                     ax.text(
-                        x_pos, value, f"{pct:.0f}%",
+                        x_pos, value, f"{value / bucket_total * 100:.0f}%",
                         ha="center", va="bottom", fontsize=7,
                     )
 
