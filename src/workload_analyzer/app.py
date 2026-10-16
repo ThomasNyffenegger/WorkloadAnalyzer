@@ -6,7 +6,8 @@ from pathlib import Path
 from PyQt6.QtCore import QTimer
 from PyQt6.QtWidgets import QApplication
 
-from workload_analyzer.core.tracker import TimeTracker
+from workload_analyzer.core.suspend_detector import SuspendDetector
+from workload_analyzer.core.tracker import TimeTracker, TrackerState
 from workload_analyzer.db.connection import connect
 from workload_analyzer.db.repository import OverlapError, Repository
 from workload_analyzer.models import EntrySource
@@ -91,6 +92,7 @@ def run() -> int:
         from workload_analyzer.ui.suggestion_popup import (
             SuggestionPopup, SUGGESTION_YES, SUGGESTION_NO, SUGGESTION_ALWAYS,
         )
+        _check_suspend_gap()  # right after resume this can run before the watchdog tick
         cat = repo.find_category_by_outlook_name(outlook_name)
         if cat is None:
             return  # No mapping — suppress
@@ -118,6 +120,7 @@ def run() -> int:
     def _on_meeting_started(title: str, outlook_category) -> None:
         try:
             from workload_analyzer.ui.suggestion_popup import MeetingCategoryDialog
+            _check_suspend_gap()
             active_cats = repo.list_categories(active_only=True)
             if outlook_category:
                 cat = repo.find_category_by_outlook_name(outlook_category)
@@ -159,6 +162,12 @@ def run() -> int:
     _absence = [None]  # Optional[(absence_start_ts: int, prev_cat_id: Optional[int])]
 
     def _on_absence_started(absence_start_ts: int) -> None:
+        started_at = tracker.current_state().started_at
+        if started_at is not None:
+            # close_entry() needs end > start — the running entry may have
+            # begun after the absence's nominal start (e.g. the last tick
+            # before a standby predates an entry that began just before it).
+            absence_start_ts = max(absence_start_ts, started_at + 1)
         prev_cat_id = tracker.stop_at(absence_start_ts)
         _absence[0] = (absence_start_ts, prev_cat_id)
 
@@ -193,6 +202,34 @@ def run() -> int:
                 tracker.start(prev_cat_id, EntrySource.MANUAL)
 
         tray.refresh()
+
+    # Standby/hibernate is invisible to idle detection (Windows' tick count
+    # stops while asleep, so after resume the user looks only briefly idle),
+    # and app timers are frozen too — the entry just keeps running and the
+    # whole night gets booked as work. The only trace is a wall-clock jump
+    # between two ticks, which SuspendDetector turns into an absence.
+    suspend_detector = SuspendDetector(
+        threshold_seconds=idle_threshold_minutes * 60,
+        clock=lambda: int(time.time()),
+    )
+
+    def _check_suspend_gap() -> None:
+        try:
+            last_alive_ts = suspend_detector.tick()
+            if last_alive_ts is None:
+                return
+            if _absence[0] is not None:
+                return  # lock/idle handling already owns this absence
+            if tracker.current_state().kind != TrackerState.Kind.TRACKING:
+                return  # nothing running, nothing to stop
+            _on_absence_started(last_alive_ts)
+            _show_recovery(int(time.time()), "Standby", EntrySource.IDLE_RECOVERY)
+        except Exception as exc:
+            _log.error("Suspend-gap handler failed: %s", exc)
+
+    suspend_timer = QTimer()
+    suspend_timer.timeout.connect(_check_suspend_gap)
+    suspend_timer.start(5_000)
 
     def _on_session_locked(lock_ts: int) -> None:
         _on_absence_started(lock_ts)

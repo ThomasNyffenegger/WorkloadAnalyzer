@@ -15,6 +15,7 @@ Windows-Tray-App zur automatischen Zeiterfassung. Erfasst, welche Kategorie (Auf
 ```
 app.py              — Startup, alle Komponenten verkabeln, Event-Handler
 core/tracker.py     — TimeTracker: start/stop/pause/resume/switch_to, Status-State-Machine
+core/suspend_detector.py — Standby/Ruhezustand über Wall-Clock-Sprung zwischen zwei Ticks (Idle-Erkennung sieht Standby nicht: Windows' Tick-Count zählt Schlafzeit nicht mit)
 db/
   connection.py     — SQLite-Connect (WAL + synchronous=NORMAL aktiviert)
   repository.py     — Alle DB-Zugriffe (kein SQL in anderen Modulen)
@@ -46,6 +47,8 @@ ui/
 - **`floating_widget.invalidate_categories()`** nach `open_settings()` aufrufen — damit Kategorie-Cache aktualisiert wird
 - **`repo.insert_closed_entry()` kann `OverlapError` werfen** — immer in try/except wrappen
 - **Tracker-State** ist die einzige Source of Truth für die laufende Erfassung — nie direkt DB abfragen
+- **Zeit, in der die App/der PC nicht lief, darf nie als erfasste Zeit zählen.** App aus → `tracker.load_state()` schliesst den Eintrag beim letzten Heartbeat; PC im Standby → `SuspendDetector` (5s-Watchdog in `app.py`) stoppt den Eintrag beim letzten Tick und zeigt das Recovery-Popup. Neue Code-Pfade, die einen Eintrag offen halten oder per `switch_to` schliessen, dürfen diese Lücken nicht überspringen
+- **Berichte teilen Einträge an Mitternacht** (`reports_window._day_slices`, geclippt auf den gewählten Zeitraum) — nie einen ganzen Eintrag seinem Start-Tag zuschlagen
 
 ## Tests ausführen
 
